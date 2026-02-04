@@ -19,13 +19,25 @@ function HomepageHeader() {
         <div className={styles.buttons}>
           <Link
             className="button button--secondary button--lg"
-            to="/docs/intro"
+            to="https://forms.gle/MD1WUn76TCeKHc669"
           >
-            Docusaurus Tutorial - 5min ⏱️
+            Join the waitlist
           </Link>
         </div>
       </div>
     </header>
+  );
+}
+
+function UnderConstruction() {
+  return (
+    <div style={{ textAlign: "center", padding: "2rem" }}>
+      <h2>🚧 Under Construction 🚧</h2>
+      <p>
+        We're working hard to bring you the best workflow manager experience.
+        Stay tuned for updates and thank you for your patience!
+      </p>
+    </div>
   );
 }
 
@@ -38,7 +50,7 @@ export default function Home(): ReactNode {
     >
       <HomepageHeader />
       <main>
-        <div>Home page</div>
+        <UnderConstruction />
       </main>
     </Layout>
   );
