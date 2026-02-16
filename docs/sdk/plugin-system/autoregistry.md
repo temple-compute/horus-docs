@@ -2,10 +2,10 @@
 id: autoregistry
 slug: /sdk/plugin-system/autoregistry
 sidebar_position: 1
-title: Auto-Registry & Plugin System
+title: Auto-Registry
 ---
 
-# Auto-Registry & Plugin System
+# Auto-Registry
 
 The Horus Runtime SDK supports automatic artifact registration and a plugin system using Python entry points.
 
@@ -41,4 +41,5 @@ Install your package in the same environment as Horus Runtime. The auto-registry
 ## References
 
 - See `horus_runtime.core.auto_registry` for implementation details.
-- Python entry points documentation: https://packaging.python.org/en/latest/specifications/entry-points/
+- Review the core implementations (`Artifact`, `Executor`, etc.) for specific entry point definitions used by the registry.
+- Official Python entry points specification: https://packaging.python.org/en/latest/specifications/entry-points/
