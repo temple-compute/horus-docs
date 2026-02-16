@@ -1,6 +1,6 @@
 ---
 sidebar_position: 1
-title: Artifact System
+title: Artifact
 ---
 
 # Artifact System
@@ -83,3 +83,13 @@ The SDK provides standard artifact implementations:
 
 These cover the majority of filesystem-based workflows and serve as reference
 implementations for custom artifacts.
+
+## Registering custom artifacts
+
+To register and discover artifact plugins within the Horus runtime use the following entry point:
+
+```toml
+[project.entry-points."horus.artifacts"]
+```
+
+For more details, refer to the [AutoRegistry documentation](../plugin-system/autoregistry.md).
