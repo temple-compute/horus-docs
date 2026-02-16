@@ -78,12 +78,13 @@ const config: Config = {
         src: "img/horus.png",
       },
       items: [
-        // {
-        //   type: "doc",
-        //   docId: "intro",
-        //   position: "left",
-        //   label: "Docs",
-        // },
+        {
+          type: "doc",
+          docId: "intro",
+          position: "left",
+          label: "Docs",
+          sidebarId: "docs",
+        },
         // {
         //   type: "doc",
         //   docId: "runtime/overview",
@@ -96,12 +97,13 @@ const config: Config = {
         //   position: "left",
         //   label: "GUI",
         // },
-        // {
-        //   type: "doc",
-        //   docId: "sdk/overview",
-        //   position: "left",
-        //   label: "SDK",
-        // },
+        {
+          type: "doc",
+          docId: "sdk/overview",
+          position: "left",
+          label: "SDK",
+          sidebarId: "sdk",
+        },
         // { to: "/blog", label: "Blog", position: "left" },
         // {
         //   type: "docsVersionDropdown",
