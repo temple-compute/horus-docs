@@ -14,7 +14,7 @@ Every executor implements:
 ```python
 def execute(self, task: BaseTask) -> int:
     """
-    Run command, return exit code (0 = success)
+    Execute the given task, return exit code (0 = success)
     """
 ```
 

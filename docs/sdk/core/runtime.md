@@ -5,7 +5,7 @@ title: Runtime
 
 # Runtime System
 
-Runtimes define the environment and context in which tasks are executed. They separate the execution context (how/where to run - executors) from the task logic (what to run - runtimes).
+Runtimes prepare the commands that tasks will execute, while executors provide the environment and context in which those commands run. They separate the execution context (how/where to run - executors) from the command preparation (what command to run - runtimes).
 
 ## Core Concept
 
@@ -24,7 +24,7 @@ The workflow engine uses runtimes to prepare commands for executors. Runtimes ha
 
 - Return a formatted command/context string
 - Use task variables, inputs, and outputs for substitution
-- Subclasses may override formatting logic
+- Subclasses override `_setup_runtime` to produce the raw command/context; `format_runtime` applies variable substitution
 
 ## Built-in Runtimes
 
@@ -47,8 +47,10 @@ class BaseRuntime(BaseModel, ABC, AutoRegistry):
 
     def format_runtime(self, task: BaseTask) -> str:
         cmd = self._setup_runtime(task)
+
+        fmt_kwargs = {} # Populated from task variables, inputs, and outputs
+
         # Substitutes variables, inputs, outputs
-        # ...see implementation for details...
         return cmd.format(**fmt_kwargs)
 ```
 
