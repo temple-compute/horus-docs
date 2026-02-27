@@ -12,7 +12,7 @@ Executors define where and how tasks run. They separate task logic (what to run)
 Every executor implements:
 
 ```python
-def execute(self, cmd: str) -> int:
+def execute(self, task: BaseTask) -> int:
     """
     Run command, return exit code (0 = success)
     """
