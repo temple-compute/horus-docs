@@ -10,6 +10,9 @@ The Horus runtime provides an extensible plugin system and SDK. Developers inter
 ## Core Abstractions
 
 - [Artifact](./core/artifact.md)
+- [Executor](./core/executor.md)
+- [Runtime](./core/runtime.md)
+- [Task](./core/task.md)
 
 ## Plugin System
 
