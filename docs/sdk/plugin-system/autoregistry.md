@@ -11,7 +11,7 @@ The Horus Runtime SDK supports automatic registration and a plugin system using 
 
 ## Features
 
-- Automatic discovery and registration of `Artifact`, `Task`, `Runtime`, `Executor`, `Workflow`, and `ArtifactSync` types
+- Automatic discovery and registration of `Artifact`, `Task`, `Runtime` and `Executor` types
 - Plugin support via `pyproject.toml` entry points
 - Extensible architecture for third-party integrations
 
@@ -31,7 +31,7 @@ List the following entry point groups in your `pyproject.toml` to register plugi
 | `horus.runtimes`  | Runtime plugins  | `command`    | `horus_builtin.runtimes.command` |
 | `horus.executors` | Executor plugins | `local`      | `horus_builtin.executors.local`  |
 
-Below is the full implementation of the horus_builtin module:
+Below is the full entry-point configuration for `horus_builtin`:
 
 ```toml
 [project.entry-points."horus.artifacts"]
