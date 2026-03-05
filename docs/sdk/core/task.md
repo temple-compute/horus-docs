@@ -23,8 +23,10 @@ The workflow engine uses tasks to manage execution, passing them to executors an
 ### Contract
 
 - Implement `run()` to define execution logic
+- Implement `is_complete` to define when the task si considered done (i.e. if all artifacts exist)
 - Validate input artifacts before execution
 - Raise errors for missing artifacts or failed execution
+- The `kind` field declared on your task class (e.g. `kind: Literal["my_task"] = "my_task"`) is used by Pydantic as the discriminator in `TaskUnion`.
 
 ## Built-in Tasks
 
@@ -38,7 +40,7 @@ The SDK provides a standard task implementation:
 class HorusTask(BaseTask):
     kind: Literal["horus_task"] = "horus_task"
 
-    def run(self):
+    def run(self) -> None:
         for input_name, artifact in self.inputs.items():
             if not artifact.exists():
                 raise ArtifactDoesNotExistError(
@@ -49,6 +51,23 @@ class HorusTask(BaseTask):
             raise TaskExecutionError(
                 f"Task execution failed with return code {return_code}"
             )
+
+     def is_complete(self) -> bool:
+        """
+        A HorusTask is considered complete if all of its output artifacts
+        exist.
+        """
+
+        # If no outputs are declared, we consider the task incomplete and
+        # always run it
+        if not self.outputs:
+            return False
+
+        for artifact in self.outputs.values():
+            if not artifact.exists():
+                return False
+
+        return True
 ```
 
 ## Base Task
@@ -66,8 +85,11 @@ class BaseTask(BaseModel, ABC, AutoRegistry):
     runtime: RuntimeUnion
 
     @abstractmethod
-    def run(self):
+    def run(self) -> None:
         pass
+
+    @abstractmethod
+    def is_complete(self) -> bool:
 ```
 
 ## Registering custom tasks

@@ -18,18 +18,37 @@ The Horus Runtime SDK supports automatic registration and a plugin system using 
 ## How Auto-Registry Works
 
 - Scans for entry points under specific groups (see below)
-- Loads and registers classes automatically at runtime
+- Loads and registers classes automatically at runtime.
+
+## The `kind` Field and Pydantic Discriminator
+
+Every registrable base class (`BaseArtifact`, `BaseTask`, `BaseRuntime`, `BaseExecutor`, `BaseWorkflow`) declares:
+
+```python
+registry_key: ClassVar[str] = "kind"
+kind: Any = None
+```
+
+The `registry_key` tells the AutoRegistry which field to use as the lookup key. Concrete implementations narrow `kind` to a `Literal` type:
+
+```python
+class HorusTask(BaseTask):
+    kind: Literal["horus_task"] = "horus_task"
+```
+
+This same `kind` field is used as the **Pydantic discriminator** in the union types (`ArtifactUnion`, `TaskUnion`, `RuntimeUnion`, `ExecutorUnion`, `WorkflowUnion`). When Pydantic deserializes a raw dict, it reads `kind` to decide which concrete class to instantiate.
 
 ## Supported Entry Points
 
 List the following entry point groups in your `pyproject.toml` to register plugins:
 
-| Entry Point Group | Plugin Type      | Example Key  | Example Module                   |
-| ----------------- | ---------------- | ------------ | -------------------------------- |
-| `horus.artifacts` | Artifact plugins | `file`       | `horus_builtin.artifacts.file`   |
-| `horus.tasks`     | Task plugins     | `horus_task` | `horus_builtin.tasks.horus_task` |
-| `horus.runtimes`  | Runtime plugins  | `command`    | `horus_builtin.runtimes.command` |
-| `horus.executors` | Executor plugins | `local`      | `horus_builtin.executors.local`  |
+| Entry Point Group | Plugin Type      | Example Key      | Example Module                           |
+| ----------------- | ---------------- | ---------------- | ---------------------------------------- |
+| `horus.artifacts` | Artifact plugins | `file`           | `horus_builtin.artifacts.file`           |
+| `horus.tasks`     | Task plugins     | `horus_task`     | `horus_builtin.tasks.horus_task`         |
+| `horus.runtimes`  | Runtime plugins  | `command`        | `horus_builtin.runtimes.command`         |
+| `horus.executors` | Executor plugins | `local`          | `horus_builtin.executors.local`          |
+| `horus.workflows` | Workflow plugins | `horus_workflow` | `horus_builtin.workflows.horus_workflow` |
 
 Below is the full entry-point configuration for `horus_builtin`:
 
@@ -50,6 +69,9 @@ command = "horus_builtin.runtimes.command"
 [project.entry-points."horus.executors"]
 # Executor plugins
 local = "horus_builtin.executors.local"
+
+[project.entry-points."horus.workflows"]
+horus_workflow = "horus_builtin.workflows.horus_workflow"
 ```
 
 ## Setting Up Plugins

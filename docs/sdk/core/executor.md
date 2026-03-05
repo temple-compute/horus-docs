@@ -25,6 +25,7 @@ The workflow engine passes commands to executors and checks return codes. Same t
 - Return `0` on success
 - Return non-zero on failure
 - Raise `ExecutionError` only for executor setup issues (not command failures)
+- The `kind` field declared on your executor class (e.g. `kind: Literal["my_executor"] = "my_executor"`) is used by Pydantic as the discriminator in `ExecutorUnion`.
 
 ## Built-in Executors
 
