@@ -25,6 +25,7 @@ The workflow engine uses runtimes to prepare commands for executors. Runtimes ha
 - Return a formatted command/context string
 - Use task variables, inputs, and outputs for substitution
 - Subclasses override `_setup_runtime` to produce the raw command/context; `format_runtime` applies variable substitution
+- The `kind` field declared on your runtime class (e.g. `kind: Literal["my_runtime"] = "my_runtime"`) is used by Pydantic as the discriminator in `RuntimeUnion`.
 
 ## Built-in Runtimes
 

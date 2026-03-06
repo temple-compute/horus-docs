@@ -60,8 +60,8 @@ Every artifact must define:
 - `exists()` → Does the artifact exist?
 - `materialize()` → Ensure the artifact is locally available.
 - `hash` → Deterministic content hash.
-
-These three methods fully define the artifact’s runtime semantics.
+- `delete()` → Deletes the artifact.
+- The `kind` field declared on your artifact class (e.g. `kind: Literal["my_artifact"] = "my_artifact"`) is used by Pydantic as the discriminator in `ArtifactUnion`.
 
 ## Artifact Resolution
 
