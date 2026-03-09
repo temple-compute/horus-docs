@@ -30,7 +30,7 @@ In the future, it will also provide:
 
 The runtime context is stored internally using Python `ContextVar`. This allows the runtime to be safely accessed from anywhere in the current execution context.
 
-To retrieve the active runtime:
+To retrieve the active context:
 
 ```python
 from horus_runtime.context import HorusContext

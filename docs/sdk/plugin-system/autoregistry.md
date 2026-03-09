@@ -100,6 +100,29 @@ Some base classes in Horus (such as `BaseRuntime`, `BaseTask`, etc.) already inh
 
 However, if you create a class that **directly inherits from `AutoRegistry`**, you must explicitly specify the `entry_point` parameter. This parameter determines which entry point group the registry will scan for implementations.
 
+:::note
+`AutoRegistry` automatically prefixes the provided `entry_point` with `horus.` internally.
+
+When defining a class, you should **not** include the `horus.` prefix:
+
+```python
+class MyRuntime(AutoRegistry, entry_point="runtime"):
+    ...
+```
+
+However, in your `pyproject.toml`, the entry point group **must include the prefix**:
+
+```toml
+[project.entry-points."horus.runtime"]
+my_runtime = "my_package.runtime.my_runtime"
+```
+
+In short:
+
+- **Class definition:** `entry_point="runtime"`
+- **pyproject.toml:** `"horus.runtime"`
+  :::
+
 For example, the `BaseRuntime` class declares its entry point as `"runtime"`:
 
 ```python
