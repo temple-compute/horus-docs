@@ -47,13 +47,20 @@ Task implementations can access the runtime context to interact with runtime ser
 Example:
 
 ```python
+from typing import Literal
 from horus_runtime.context import HorusContext
+from horus_runtime.core.task.base import BaseTask
 
 class MyTask(BaseTask):
+
+    kind: Literal["my_task"] = "my_task"
 
     def run(self):
         ctx = HorusContext.get_context()
         # Access HorusContext services here
+
+    # Rest of the task implementation
+    ...
 ```
 
 This allows tasks to interact with the Horus environment without requiring explicit dependency injection.
