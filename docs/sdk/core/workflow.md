@@ -43,7 +43,7 @@ One could subclass the `BaseWorkflow` to provide dependency resolution, and othe
 All workflows inherit from `BaseWorkflow`:
 
 ```python
-class BaseWorkflow(BaseModel, ABC, AutoRegistry):
+class BaseWorkflow(AutoRegistry, entry_point="workflow"):
     registry_key: ClassVar[str] = "kind"
     kind: Any = None
     name: str

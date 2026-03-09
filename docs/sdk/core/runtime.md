@@ -38,7 +38,7 @@ The SDK provides a standard runtime implementation:
 All runtimes inherit from `BaseRuntime`:
 
 ```python
-class BaseRuntime(BaseModel, ABC, AutoRegistry):
+class BaseRuntime(AutoRegistry, entry_point="runtime"):
     registry_key: ClassVar[str] = "kind"
     kind: Any = None
 

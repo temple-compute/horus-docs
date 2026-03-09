@@ -76,7 +76,7 @@ class HorusTask(BaseTask):
 All tasks inherit from `BaseTask`:
 
 ```python
-class BaseTask(BaseModel, ABC, AutoRegistry):
+class BaseTask(AutoRegistry, entry_point="task"):
     registry_key: ClassVar[str] = "kind"
     kind: Any = None
     inputs: dict[str, ArtifactUnion] = {}
