@@ -2,6 +2,7 @@
 id: logger
 title: Logging
 sidebar_label: Logging
+sidebar_position: 6
 ---
 
 # Horus Runtime Logging
@@ -75,5 +76,5 @@ Example of proper logging:
 ```python
 horus_logger.info("Task completed successfully")
 horus_logger.warning("Missing optional field, using default")
-horus_logger.error("Task failed due to exception", exc_info=True)
+horus_logger.exception("Task failed due to exception")
 ```
