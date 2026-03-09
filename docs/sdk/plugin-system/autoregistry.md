@@ -42,36 +42,36 @@ This same `kind` field is used as the **Pydantic discriminator** in the union ty
 
 List the following entry point groups in your `pyproject.toml` to register plugins:
 
-| Entry Point Group | Plugin Type      | Example Key      | Example Module                           |
-| ----------------- | ---------------- | ---------------- | ---------------------------------------- |
-| `horus.artifacts` | Artifact plugins | `file`           | `horus_builtin.artifacts.file`           |
-| `horus.tasks`     | Task plugins     | `horus_task`     | `horus_builtin.tasks.horus_task`         |
-| `horus.runtimes`  | Runtime plugins  | `command`        | `horus_builtin.runtimes.command`         |
-| `horus.executors` | Executor plugins | `local`          | `horus_builtin.executors.local`          |
-| `horus.workflows` | Workflow plugins | `horus_workflow` | `horus_builtin.workflows.horus_workflow` |
+| Entry Point Group | Plugin Type      | Example Key      | Example Module                          |
+| ----------------- | ---------------- | ---------------- | --------------------------------------- |
+| `horus.artifact`  | Artifact plugins | `file`           | `horus_builtin.artifact.file`           |
+| `horus.task`      | Task plugins     | `horus_task`     | `horus_builtin.task.horus_task`         |
+| `horus.runtime`   | Runtime plugins  | `command`        | `horus_builtin.runtime.command`         |
+| `horus.executor`  | Executor plugins | `local`          | `horus_builtin.executor.local`          |
+| `horus.workflow`  | Workflow plugins | `horus_workflow` | `horus_builtin.workflow.horus_workflow` |
 
 Below is the full entry-point configuration for `horus_builtin`:
 
 ```toml
-[project.entry-points."horus.artifacts"]
+[project.entry-points."horus.artifact"]
 # Artifact plugins
-file = "horus_builtin.artifacts.file"
-folder = "horus_builtin.artifacts.folder"
+file = "horus_builtin.artifact.file"
+folder = "horus_builtin.artifact.folder"
 
-[project.entry-points."horus.tasks"]
+[project.entry-points."horus.task"]
 # Task plugins
-horus_task = "horus_builtin.tasks.horus_task"
+horus_task = "horus_builtin.task.horus_task"
 
-[project.entry-points."horus.runtimes"]
+[project.entry-points."horus.runtime"]
 # Runtime plugins
-command = "horus_builtin.runtimes.command"
+command = "horus_builtin.runtime.command"
 
-[project.entry-points."horus.executors"]
+[project.entry-points."horus.executor"]
 # Executor plugins
-local = "horus_builtin.executors.local"
+local = "horus_builtin.executor.local"
 
-[project.entry-points."horus.workflows"]
-horus_workflow = "horus_builtin.workflows.horus_workflow"
+[project.entry-points."horus.workflow"]
+horus_workflow = "horus_builtin.workflow.horus_workflow"
 ```
 
 ## Setting Up Plugins
@@ -81,8 +81,8 @@ horus_workflow = "horus_builtin.workflows.horus_workflow"
 Add your plugin under the appropriate entry point group. For example, to add a custom executor:
 
 ```toml
-[project.entry-points."horus.executors"]
-my_executor = "my_package.executors.my_executor"
+[project.entry-points."horus.executor"]
+my_executor = "my_package.executor.my_executor"
 ```
 
 ### 2. Install Your Package

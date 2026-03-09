@@ -104,7 +104,7 @@ class HorusWorkflow(BaseWorkflow):
 To register and discover workflow plugins within the Horus runtime, use the following entry point:
 
 ```toml
-[project.entry-points."horus.workflows"]
+[project.entry-points."horus.workflow"]
 ```
 
 For more details, refer to the [AutoRegistry documentation](../plugin-system/autoregistry.md).

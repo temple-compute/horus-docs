@@ -89,7 +89,7 @@ implementations for custom artifacts.
 To register and discover artifact plugins within the Horus runtime use the following entry point:
 
 ```toml
-[project.entry-points."horus.artifacts"]
+[project.entry-points."horus.artifact"]
 ```
 
 For more details, refer to the [AutoRegistry documentation](../plugin-system/autoregistry.md).

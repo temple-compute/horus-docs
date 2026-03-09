@@ -60,7 +60,7 @@ class BaseRuntime(BaseModel, ABC, AutoRegistry):
 To register and discover runtime plugins within the Horus runtime, use the following entry point:
 
 ```toml
-[project.entry-points."horus.runtimes"]
+[project.entry-points."horus.runtime"]
 ```
 
 For more details, refer to the [AutoRegistry documentation](../plugin-system/autoregistry.md).

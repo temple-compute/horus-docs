@@ -104,7 +104,7 @@ class BaseTask(BaseModel, ABC, AutoRegistry):
 To register and discover task plugins within the Horus runtime, use the following entry point:
 
 ```toml
-[project.entry-points."horus.tasks"]
+[project.entry-points."horus.task"]
 ```
 
 For more details, refer to the [AutoRegistry documentation](../plugin-system/autoregistry.md).
