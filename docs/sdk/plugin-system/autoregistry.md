@@ -11,14 +11,21 @@ The Horus Runtime SDK supports automatic registration and a plugin system using 
 
 ## Features
 
-- Automatic discovery and registration of `Artifact`, `Task`, `Runtime` and `Executor` types
+- Automatic discovery and registration of `Artifact`, `Task`, `Runtime`, `Executor`, and `Workflow` types
 - Plugin support via `pyproject.toml` entry points
 - Extensible architecture for third-party integrations
 
 ## How Auto-Registry Works
 
-- Scans for entry points under specific groups (see below)
-- Loads and registers classes automatically at runtime.
+The `AutoRegistry` system automatically discovers and registers plugin implementations at runtime.
+
+It works by:
+
+- Scanning Python entry points under specific groups
+- Importing the corresponding modules
+- Registering classes that inherit from the appropriate base classes
+
+This allows Horus to dynamically load plugins without requiring manual imports or configuration.
 
 ## The `kind` Field and Pydantic Discriminator
 
@@ -29,68 +36,140 @@ registry_key: ClassVar[str] = "kind"
 kind: Any = None
 ```
 
-The `registry_key` tells the AutoRegistry which field to use as the lookup key. Concrete implementations narrow `kind` to a `Literal` type:
+The `registry_key` tells `AutoRegistry` which field to use as the lookup key.
+
+Concrete implementations narrow `kind` to a `Literal` type:
 
 ```python
 class HorusTask(BaseTask):
     kind: Literal["horus_task"] = "horus_task"
 ```
 
-This same `kind` field is used as the **Pydantic discriminator** in the union types (`ArtifactUnion`, `TaskUnion`, `RuntimeUnion`, `ExecutorUnion`, `WorkflowUnion`). When Pydantic deserializes a raw dict, it reads `kind` to decide which concrete class to instantiate.
+This same `kind` field is also used as the **Pydantic discriminator**. When Horus deserializes a raw dictionary into a model, Pydantic reads the `kind` field to determine which concrete class to instantiate.
 
 ## Supported Entry Points
 
-List the following entry point groups in your `pyproject.toml` to register plugins:
+Plugins are exposed through Python entry points defined in `pyproject.toml`.
 
-| Entry Point Group | Plugin Type      | Example Key      | Example Module                           |
-| ----------------- | ---------------- | ---------------- | ---------------------------------------- |
-| `horus.artifacts` | Artifact plugins | `file`           | `horus_builtin.artifacts.file`           |
-| `horus.tasks`     | Task plugins     | `horus_task`     | `horus_builtin.tasks.horus_task`         |
-| `horus.runtimes`  | Runtime plugins  | `command`        | `horus_builtin.runtimes.command`         |
-| `horus.executors` | Executor plugins | `local`          | `horus_builtin.executors.local`          |
-| `horus.workflows` | Workflow plugins | `horus_workflow` | `horus_builtin.workflows.horus_workflow` |
+| Entry Point Group | Plugin Type      | Example Key      | Example Module                          |
+| ----------------- | ---------------- | ---------------- | --------------------------------------- |
+| `horus.artifact`  | Artifact plugins | `file`           | `horus_builtin.artifact.file`           |
+| `horus.task`      | Task plugins     | `horus_task`     | `horus_builtin.task.horus_task`         |
+| `horus.runtime`   | Runtime plugins  | `command`        | `horus_builtin.runtime.command`         |
+| `horus.executor`  | Executor plugins | `local`          | `horus_builtin.executor.local`          |
+| `horus.workflow`  | Workflow plugins | `horus_workflow` | `horus_builtin.workflow.horus_workflow` |
 
-Below is the full entry-point configuration for `horus_builtin`:
+Below is the entry-point configuration used by `horus_builtin`:
 
 ```toml
-[project.entry-points."horus.artifacts"]
-# Artifact plugins
-file = "horus_builtin.artifacts.file"
-folder = "horus_builtin.artifacts.folder"
+[project.entry-points."horus.artifact"]
+file = "horus_builtin.artifact.file"
+folder = "horus_builtin.artifact.folder"
 
-[project.entry-points."horus.tasks"]
-# Task plugins
-horus_task = "horus_builtin.tasks.horus_task"
+[project.entry-points."horus.task"]
+horus_task = "horus_builtin.task.horus_task"
 
-[project.entry-points."horus.runtimes"]
-# Runtime plugins
-command = "horus_builtin.runtimes.command"
+[project.entry-points."horus.runtime"]
+command = "horus_builtin.runtime.command"
 
-[project.entry-points."horus.executors"]
-# Executor plugins
-local = "horus_builtin.executors.local"
+[project.entry-points."horus.executor"]
+local = "horus_builtin.executor.local"
 
-[project.entry-points."horus.workflows"]
-horus_workflow = "horus_builtin.workflows.horus_workflow"
+[project.entry-points."horus.workflow"]
+horus_workflow = "horus_builtin.workflow.horus_workflow"
 ```
 
 ## Setting Up Plugins
 
 ### 1. Define Entry Points in `pyproject.toml`
 
-Add your plugin under the appropriate entry point group. For example, to add a custom executor:
+Add your plugin under the appropriate entry point group. For example:
 
 ```toml
-[project.entry-points."horus.executors"]
-my_executor = "my_package.executors.my_executor"
+[project.entry-points."horus.executor"]
+my_executor = "my_package.executor.my_executor"
 ```
 
 ### 2. Install Your Package
 
-Install your package in the same environment as Horus Runtime. The auto-registry will discover and register your plugin automatically.
+Install your package in the same environment as Horus Runtime. The auto-registry will discover and register your plugin automatically at runtime.
+
+## Custom Registry and Entry Points
+
+Some base classes in Horus (such as `BaseRuntime`, `BaseTask`, etc.) already inherit from `AutoRegistry` and define the entry point group internally.
+
+However, if you create a class that **directly inherits from `AutoRegistry`**, you must explicitly specify the `entry_point` parameter. This parameter determines which entry point group the registry will scan for implementations.
+
+:::note
+`AutoRegistry` automatically prefixes the provided `entry_point` with `horus.` internally.
+
+When defining a class, you should **not** include the `horus.` prefix:
+
+```python
+class MyRuntime(AutoRegistry, entry_point="runtime"):
+    ...
+```
+
+However, in your `pyproject.toml`, the entry point group **must include the prefix**:
+
+```toml
+[project.entry-points."horus.runtime"]
+my_runtime = "my_package.runtime.my_runtime"
+```
+
+In short:
+
+- **Class definition:** `entry_point="runtime"`
+- **pyproject.toml:** `"horus.runtime"`
+  :::
+
+For example, the `BaseRuntime` class declares its entry point as `"runtime"`:
+
+```python
+class BaseRuntime(AutoRegistry, entry_point="runtime"):
+    """
+    The base runtime. This class provides the foundational functionality for
+    executing tasks, and should be ingested by the executor.
+    """
+    registry_key: ClassVar[str] = "kind"
+    kind: Any = ...
+```
+
+Concrete implementations of this registry are then discovered from the corresponding entry point group.
+
+### Creating a Custom Registry
+
+You can also define your own registry by inheriting directly from `AutoRegistry`.
+
+Example:
+
+```python
+class MyCustomPluginRegistry(AutoRegistry, entry_point="custom"):
+    registry_key: ClassVar[str] = "plugin_type"
+    plugin_type: Any = ...
+```
+
+Concrete implementations must define the discriminator field:
+
+```python
+class MyPlugin(MyCustomPluginRegistry):
+    plugin_type: Literal["my_plugin"] = "my_plugin"
+```
+
+### Registering Custom Plugins
+
+Expose implementations through `pyproject.toml`:
+
+```toml
+[project.entry-points."horus.custom"]
+my_plugin = "my_package.my_plugin"
+```
+
+At runtime, `AutoRegistry` will discover and register all implementations automatically.
 
 ## References
 
 - See `horus_runtime.core.auto_registry` for implementation details.
-- Review the core implementations (`Artifact`, `Task`, `Runtime`, `Executor`, etc.) for specific entry point definitions used by the registry.
-- Official Python entry points specification: https://packaging.python.org/en/latest/specifications/entry-points/
+- Review the core implementations (`Artifact`, `Task`, `Runtime`, `Executor`, etc.) for examples of registry definitions.
+- Official Python entry points specification:
+  [https://packaging.python.org/en/latest/specifications/entry-points/](https://packaging.python.org/en/latest/specifications/entry-points/)

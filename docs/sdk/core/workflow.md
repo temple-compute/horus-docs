@@ -43,7 +43,7 @@ One could subclass the `BaseWorkflow` to provide dependency resolution, and othe
 All workflows inherit from `BaseWorkflow`:
 
 ```python
-class BaseWorkflow(BaseModel, ABC, AutoRegistry):
+class BaseWorkflow(AutoRegistry, entry_point="workflow"):
     registry_key: ClassVar[str] = "kind"
     kind: Any = None
     name: str
@@ -104,7 +104,7 @@ class HorusWorkflow(BaseWorkflow):
 To register and discover workflow plugins within the Horus runtime, use the following entry point:
 
 ```toml
-[project.entry-points."horus.workflows"]
+[project.entry-points."horus.workflow"]
 ```
 
 For more details, refer to the [AutoRegistry documentation](../plugin-system/autoregistry.md).

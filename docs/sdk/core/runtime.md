@@ -38,7 +38,7 @@ The SDK provides a standard runtime implementation:
 All runtimes inherit from `BaseRuntime`:
 
 ```python
-class BaseRuntime(BaseModel, ABC, AutoRegistry):
+class BaseRuntime(AutoRegistry, entry_point="runtime"):
     registry_key: ClassVar[str] = "kind"
     kind: Any = None
 
@@ -60,7 +60,7 @@ class BaseRuntime(BaseModel, ABC, AutoRegistry):
 To register and discover runtime plugins within the Horus runtime, use the following entry point:
 
 ```toml
-[project.entry-points."horus.runtimes"]
+[project.entry-points."horus.runtime"]
 ```
 
 For more details, refer to the [AutoRegistry documentation](../plugin-system/autoregistry.md).

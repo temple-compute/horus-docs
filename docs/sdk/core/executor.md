@@ -38,7 +38,7 @@ The SDK provides a standard executor implementation:
 To register and discover executor plugins within the Horus runtime use the following entry point:
 
 ```toml
-[project.entry-points."horus.executors"]
+[project.entry-points."horus.executor"]
 ```
 
 For more details, refer to the [AutoRegistry documentation](../plugin-system/autoregistry.md).
