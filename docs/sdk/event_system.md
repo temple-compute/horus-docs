@@ -107,6 +107,7 @@ class FailureAlerter(BaseEventSubscriber[TaskFailedEvent]):
         ...
 
     def handle(self, event: TaskFailedEvent) -> None:
+        # NOTE: In real code, use the horus-runtime configured logger instead of print().
         print(f"[{event.source}] Task failed: {event.error}")
 ```
 
@@ -125,6 +126,7 @@ class AuditLogger(BaseEventSubscriber):
         ...
 
     def handle(self, event: BaseEvent) -> None:
+        # NOTE: In real code, use the horus-runtime configured logger instead of print().
         print(f"{event.timestamp} [{event.level}] {event.event_type}: {event.message}")
 ```
 

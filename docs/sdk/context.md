@@ -71,9 +71,9 @@ class LifecycleSubscriber(BaseEventSubscriber):
 
     def handle(self, event) -> None:
         if isinstance(event, HorusRuntimeReadyEvent):
-            print("Runtime is ready — initialize your resources here.")
+            # Runtime is ready. Initialize your resources here.
         elif isinstance(event, HorusRuntimeWillShutdownEvent):
-            print("Runtime shutting down — release your resources here.")
+            # Runtime shutting down. Release your resources here.
 ```
 
 ## Accessing the Context
