@@ -34,7 +34,7 @@ ctx = HorusContext.get_context()
 ctx.bus.emit(MyEvent(message="something happened"))
 ```
 
-`emit()` returns immediately. Transport delivery happens asynchronously in the background.
+`emit()` runs all subscriber handlers synchronously on the calling thread and returns only after they complete. It does not wait for transports, whose delivery happens asynchronously in the background.
 
 ## Event Bus
 
@@ -50,7 +50,7 @@ ctx.bus.emit(MyEvent(message="something happened"))
 | `subscribe(subscriber)`    | Registers a subscriber manually.                                                                                                  |
 | `add_transport(transport)` | Registers a transport manually.                                                                                                   |
 
-`start()` auto-discovers transports and subscribers from the runtime registry, any class registered under the `"transport"` or `"subscriber"` entry points is instantiated automatically. Manual registration via `subscribe()` and `add_transport()` is also supported.
+`start()` auto-discovers transports and subscribers from the runtime registry, any class registered under the `"horus.transport"` or `"horus.subscriber"` entry points is instantiated automatically. Manual registration via `subscribe()` and `add_transport()` is also supported.
 
 ## Defining Events
 
@@ -113,6 +113,10 @@ class FailureAlerter(BaseEventSubscriber[TaskFailedEvent]):
 For a wildcard subscriber that receives every event:
 
 ```python
+from typing import Literal, ClassVar
+from horus_runtime.event.base import BaseEvent
+from horus_runtime.event.subscriber import BaseEventSubscriber, EventFilterType
+
 class AuditLogger(BaseEventSubscriber):
     subscriber_type: Literal["audit_logger"] = "audit_logger"
     events: ClassVar[EventFilterType] = None  # receives all events
