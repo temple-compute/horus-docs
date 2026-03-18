@@ -7,30 +7,76 @@ title: Horus Context
 
 # Runtime Context
 
-`HorusContext` is the global runtime context for the Horus Runtime SDK.  
-It is responsible for initializing the runtime environment, loading plugins, and exposing shared runtime state to the system.
+`HorusContext` is the global runtime context for the Horus Runtime SDK. It is responsible for initializing the runtime environment, loading plugins, and exposing shared runtime state, including the [Event Bus](./event_system.md), to all other components.
 
-The runtime context can be accessed from anywhere in the execution flow, including **task implementations**, allowing them to interact with the active workflow, loaded plugins, and other runtime services.
+The context is stored in a `ContextVar` and can be accessed from anywhere in the current execution flow, including task implementations.
 
-## Responsibilities
+## Lifecycle
 
-`HorusContext` currently handles:
+The runtime must be explicitly started and stopped. Both operations emit lifecycle events on the bus so subscribers can react.
 
-- Runtime initialization
-- Plugin discovery and registration
-- Global context management
+### `boot()`
 
-In the future, it will also provide:
+Initializes the runtime. Must be called before using any other `horus-runtime` features.
 
-- Workflow execution context
-- Event system access
-- Runtime-level services and shared state
+```python
+from horus_runtime.context import HorusContext
 
-## Accessing the Runtime Context
+ctx = HorusContext.boot()
+```
 
-The runtime context is stored internally using Python `ContextVar`. This allows the runtime to be safely accessed from anywhere in the current execution context.
+`boot()` performs the following steps in order:
 
-To retrieve the active context:
+1. Instantiates `HorusContext` with a new `HorusEventBus`.
+2. Calls `AutoRegistry.init_registry()` to discover and load all registered plugins.
+3. Calls `bus.start()` to instantiate transports and subscribers.
+4. Sets the context as the active `ContextVar`.
+5. Emits `HorusRuntimeReadyEvent` so plugins can react to the runtime being fully initialized.
+
+### `shutdown()`
+
+Gracefully tears down the runtime.
+
+```python
+ctx.shutdown()
+```
+
+`shutdown()` performs the following steps in order:
+
+1. Emits `HorusRuntimeWillShutdownEvent` so subscribers can react before transports stop.
+2. Calls `bus.stop()` to await all transport shutdown coroutines and stop the background async loop.
+
+## Lifecycle Events
+
+`HorusContext` emits two built-in events during its lifecycle:
+
+| Event                           | `event_type`                    | When                                                              |
+| ------------------------------- | ------------------------------- | ----------------------------------------------------------------- |
+| `HorusRuntimeReadyEvent`        | `"horus_runtime_ready"`         | After `boot()` completes. Bus is running, all plugins are loaded. |
+| `HorusRuntimeWillShutdownEvent` | `"horus_runtime_will_shutdown"` | At the start of `shutdown()`. Before any transport is stopped.    |
+
+Both inherit from `HorusContextEvent`, which itself inherits from `BaseEvent`. You can subscribe to either specifically or to `HorusContextEvent` to handle both:
+
+```python
+from typing import Literal, ClassVar
+from horus_runtime.context import HorusRuntimeReadyEvent, HorusRuntimeWillShutdownEvent
+from horus_runtime.event.subscriber import BaseEventSubscriber, EventFilterType
+
+class LifecycleSubscriber(BaseEventSubscriber):
+    subscriber_type: Literal["lifecycle"] = "lifecycle"
+    events: ClassVar[EventFilterType] = (HorusRuntimeReadyEvent, HorusRuntimeWillShutdownEvent)
+
+    def setup(self) -> None:
+        ...
+
+    def handle(self, event) -> None:
+        if isinstance(event, HorusRuntimeReadyEvent):
+            # Runtime is ready. Initialize your resources here.
+        elif isinstance(event, HorusRuntimeWillShutdownEvent):
+            # Runtime shutting down. Release your resources here.
+```
+
+## Accessing the Context
 
 ```python
 from horus_runtime.context import HorusContext
@@ -38,13 +84,9 @@ from horus_runtime.context import HorusContext
 ctx = HorusContext.get_context()
 ```
 
-This method returns the currently active `HorusContext` instance.
+Returns the active `HorusContext` instance. Raises a `LookupError` if called before `boot()`.
 
-## Using the Runtime Inside Tasks
-
-Task implementations can access the runtime context to interact with runtime services.
-
-Example:
+## Using the Context Inside Tasks
 
 ```python
 from typing import Literal
@@ -52,15 +94,11 @@ from horus_runtime.context import HorusContext
 from horus_runtime.core.task.base import BaseTask
 
 class MyTask(BaseTask):
-
     kind: Literal["my_task"] = "my_task"
 
     def run(self):
         ctx = HorusContext.get_context()
-        # Access HorusContext services here
-
-    # Rest of the task implementation
-    ...
+        ctx.bus.emit(MyEvent(message="task started"))
 ```
 
-This allows tasks to interact with the Horus environment without requiring explicit dependency injection.
+No explicit dependency injection is needed, the context is available anywhere within the active execution scope.

@@ -83,19 +83,12 @@ class HorusWorkflow(BaseWorkflow):
     def run(self) -> None:
         for task in self.tasks.values():
             if task.is_complete():
-                print(
-                    f"[{self.name}] Skipping '{task.name}': "
-                    "all outputs already exist."
-                )
                 continue
 
-            print(f"[{self.name}] Running '{task.name}'...")
             task.run()
-            print(f"[{self.name}] '{task.name}' completed.")
 
     def reset(self) -> None:
         for task in self.tasks.values():
-            print(f"[{self.name}] Resetting task '{task.name}'...")
             task.reset()
 ```
 
