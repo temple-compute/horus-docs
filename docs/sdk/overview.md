@@ -5,7 +5,8 @@ sidebar_position: 1
 
 # Runtime SDK
 
-The Horus runtime provides an extensible plugin system and SDK. Developers interact with the workflow engine, GUI, and other components by implementing classes from core abstractions.
+The Horus runtime provides an extensible SDK for defining artifacts, runtimes,
+executors, tasks, workflows, and interactive inputs.
 
 ## Core Abstractions
 
@@ -13,14 +14,19 @@ The Horus runtime provides an extensible plugin system and SDK. Developers inter
 - [Executor](./core/executor.md)
 - [Runtime](./core/runtime.md)
 - [Task](./core/task.md)
+- [FunctionTask](./core/function-task.md)
+- [Input](./core/input.md)
+- [Workflow](./core/workflow.md)
 
 ## Plugin System
 
-- [Autoregistry](./plugin-system/autoregistry.md)
+- [Auto-Registry](./plugin-system/autoregistry.md)
 
 ## Features
 
-- Extensible plugin system
-- Workflow engine integration
-- GUI component integration
+- Extensible plugin system via Python entry points
+- Artifact-driven workflow execution
+- Shell-based and Python-native task execution
+- Code-first workflows with `FunctionTask`
+- Interactive workflow input support
 - [Internationalization (i18n)](i18n.md)

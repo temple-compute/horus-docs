@@ -1,42 +1,35 @@
 ---
-sidebar_position: 5
+sidebar_position: 7
 title: Workflow
 ---
 
 # Workflow System
 
-Workflows orchestrate an ordered set of tasks within the Horus runtime engine.
+Workflows orchestrate an ordered set of tasks.
+
+Horus currently executes tasks in definition order. It does not perform
+dependency resolution automatically, so task ordering is the workflow author's
+responsibility.
 
 ## Core Concept
 
-Every workflow implements the following methods:
+Every workflow implements:
 
 ```python
 @classmethod
-def from_yaml(cls, path: str | Path) -> "BaseWorkflow":
-    """
-    Load a workflow from a YAML file.
-    """
+def from_yaml(cls, path: str | Path) -> Self: ...
 
-def run(self) -> None:
-    """
-    Execute the workflow.
-    """
+async def run(self) -> None: ...
 
-def reset(self) -> None:
-    """
-    Reset the workflow by resetting all tasks.
-    """
+def reset(self) -> None: ...
 ```
-
-One could subclass the `BaseWorkflow` to provide dependency resolution, and other execution pipelines.
 
 ### Contract
 
-- Implement `from_yaml()` to load a workflow from a YAML file
-- Implement `run()` to define execution order and skip logic
-- Implement `reset()` to clean up task outputs and allow re-execution
-- The `kind` field declared on your workflow class (e.g. `kind: Literal["my_workflow"] = "my_workflow"`) is used by Pydantic as the discriminator in `WorkflowUnion`.
+- `from_yaml()` loads a workflow definition
+- `run()` is asynchronous
+- `reset()` clears task state so the workflow can be re-run
+- `kind: str` is the registry discriminator
 
 ## Base Workflow
 
@@ -45,17 +38,18 @@ All workflows inherit from `BaseWorkflow`:
 ```python
 class BaseWorkflow(AutoRegistry, entry_point="workflow"):
     registry_key: ClassVar[str] = "kind"
-    kind: Any = None
+    kind: str
     name: str
-    tasks: dict[str, TaskUnion]
+    tasks: dict[str, BaseTask] = Field(default_factory=dict)
+    input: BaseInput = CLIInput()
 
     @classmethod
     @abstractmethod
-    def from_yaml(cls, path: str | Path) -> "BaseWorkflow":
+    def from_yaml(cls, path: str | Path) -> Self:
         pass
 
     @abstractmethod
-    def run(self) -> None:
+    async def run(self) -> None:
         pass
 
     @abstractmethod
@@ -63,41 +57,39 @@ class BaseWorkflow(AutoRegistry, entry_point="workflow"):
         pass
 ```
 
-## Built-in Workflows
+Each task receives its `task_id` from the key used in the workflow's `tasks`
+mapping.
 
-The SDK provides a standard workflow implementation:
+## Built-in Workflow
 
-- `HorusWorkflow` - Basic Horus runtime workflow. Executes tasks in definition order, skipping any task whose output artifacts already exist.
+- `HorusWorkflow`: runs tasks in definition order and skips tasks whose
+  outputs already exist when `task.skip_if_complete` is `True`
 
-### Example
+## Example
 
 ```python
-class HorusWorkflow(BaseWorkflow):
-    kind: Literal["horus_workflow"] = "horus_workflow"
+import asyncio
 
-    @classmethod
-    def from_yaml(cls, path: str | Path) -> "HorusWorkflow":
-        with Path(path).open("r", encoding="utf-8") as fh:
-            return cls.model_validate(yaml.safe_load(fh))
+from horus_builtin.workflow.horus_workflow import HorusWorkflow
 
-    def run(self) -> None:
-        for task in self.tasks.values():
-            if task.is_complete():
-                continue
+wf = HorusWorkflow(name="example")
 
-            task.run()
-
-    def reset(self) -> None:
-        for task in self.tasks.values():
-            task.reset()
+asyncio.run(wf.run())
 ```
 
-## Registering custom workflows
+## Interactive Input
 
-To register and discover workflow plugins within the Horus runtime, use the following entry point:
+Workflows expose an `input` field used for interactive prompting at runtime.
+The default implementation is `CLIInput`.
+
+See [Input](./input.md) for details.
+
+## Registering Custom Workflows
+
+To register workflow plugins, expose them through:
 
 ```toml
 [project.entry-points."horus.workflow"]
 ```
 
-For more details, refer to the [AutoRegistry documentation](../plugin-system/autoregistry.md).
+For more details, refer to the [Auto-Registry documentation](../plugin-system/autoregistry.md).

@@ -89,14 +89,13 @@ Returns the active `HorusContext` instance. Raises a `LookupError` if called bef
 ## Using the Context Inside Tasks
 
 ```python
-from typing import Literal
 from horus_runtime.context import HorusContext
 from horus_runtime.core.task.base import BaseTask
 
 class MyTask(BaseTask):
-    kind: Literal["my_task"] = "my_task"
+    kind: str = "my_task"
 
-    def run(self):
+    async def run(self) -> None:
         ctx = HorusContext.get_context()
         ctx.bus.emit(MyEvent(message="task started"))
 ```
