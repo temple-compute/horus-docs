@@ -5,62 +5,89 @@ title: Runtime
 
 # Runtime System
 
-Runtimes prepare the commands that tasks will execute, while executors provide the environment and context in which those commands run. They separate the execution context (how/where to run - executors) from the command preparation (what command to run - runtimes).
+Runtimes describe what should be executed. Executors then decide how to run
+that prepared value in a particular environment.
+
+In practice, a runtime can prepare a shell command, a Python callable, a Python
+code string, or any other executor-specific payload.
 
 ## Core Concept
 
 Every runtime implements:
 
 ```python
-def _setup_runtime(self, task: BaseTask) -> str:
+def setup_runtime(self, task: BaseTask) -> T:
     """
-    Prepare runtime for execution, return formatted command/context
+    Prepare the runtime payload that an executor will consume.
     """
 ```
-
-The workflow engine uses runtimes to prepare commands for executors. Runtimes handle variable substitution and context formatting.
 
 ### Contract
 
-- Return a formatted command/context string
-- Use task variables, inputs, and outputs for substitution
-- Subclasses override `_setup_runtime` to produce the raw command/context; `format_runtime` applies variable substitution
-- The `kind` field declared on your runtime class (e.g. `kind: Literal["my_runtime"] = "my_runtime"`) is used by Pydantic as the discriminator in `RuntimeUnion`.
-
-## Built-in Runtimes
-
-The SDK provides a standard runtime implementation:
-
-- `CommandRuntime` - Accepts a shell script as input. Returns the specified script after formatting.
+- Return a payload of type `T` that the paired executor understands
+- Use task context when needed to format or prepare the payload
+- Use `kind: str` as the registry discriminator
 
 ## Base Runtime
 
-All runtimes inherit from `BaseRuntime`:
+All runtimes inherit from `BaseRuntime[T]`:
 
 ```python
-class BaseRuntime(AutoRegistry, entry_point="runtime"):
+class BaseRuntime[T: Any = Any](AutoRegistry, entry_point="runtime"):
     registry_key: ClassVar[str] = "kind"
-    kind: Any = None
+    kind: str
 
     @abstractmethod
-    def _setup_runtime(self, task: BaseTask) -> str:
+    def setup_runtime(self, task: BaseTask) -> T:
         pass
-
-    def format_runtime(self, task: BaseTask) -> str:
-        cmd = self._setup_runtime(task)
-
-        fmt_kwargs = {} # Populated from task variables, inputs, and outputs
-
-        # Substitutes variables, inputs, outputs
-        return cmd.format(**fmt_kwargs)
 ```
 
-## Registering custom runtimes
+The generic return type is intentionally flexible. This allows Horus runtimes
+to return more than strings, such as Python callables for in-process execution.
 
-To register and discover runtime plugins within the Horus runtime, use the following entry point:
+## Built-in Runtimes
+
+- `CommandRuntime`: formats and returns a shell command string
+- `PythonFunctionRuntime`: stores a Python callable and returns it unchanged
+- `PythonCodeStringRuntime`: returns a Python code string for in-process
+  execution with `exec()`
+
+## Example
+
+```python
+from horus_builtin.runtime.command import CommandRuntime
+
+runtime = CommandRuntime(
+    command="cp {input_file.path} {task.name}.bak",
+)
+```
+
+`CommandRuntime` formats placeholders from:
+
+- `task`
+- declared input artifacts
+- declared output artifacts
+- `task.variables`
+
+## Python-Native Runtime Examples
+
+```python
+from horus_builtin.runtime.python import PythonFunctionRuntime
+from horus_builtin.runtime.python_string import PythonCodeStringRuntime
+
+runtime1 = PythonFunctionRuntime(func=lambda: print("hello from python"))
+
+runtime2 = PythonCodeStringRuntime(
+    code="result = 1 + 1\nprint(result)"
+)
+```
+
+## Registering Custom Runtimes
+
+To register runtime plugins, expose them through:
 
 ```toml
 [project.entry-points."horus.runtime"]
 ```
 
-For more details, refer to the [AutoRegistry documentation](../plugin-system/autoregistry.md).
+For more details, refer to the [Auto-Registry documentation](../plugin-system/autoregistry.md).

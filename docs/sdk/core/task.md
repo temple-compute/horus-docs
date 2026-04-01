@@ -5,71 +5,37 @@ title: Task
 
 # Task System
 
-Tasks define the logic and context for execution within the Horus workflow engine. They encapsulate inputs, outputs, variables, and specify the executor and runtime for execution.
+Tasks are the unit of work in Horus. A task binds together its input and output
+artifacts, execution variables, executor, and runtime.
 
 ## Core Concept
 
 Every task implements:
 
 ```python
-def run(self):
+async def run(self) -> None:
     """
-    Run the task. Should be implemented by subclasses to define execution logic.
+    Execute the task.
     """
 ```
 
-The workflow engine uses tasks to manage execution, passing them to executors and runtimes. Tasks validate inputs, handle outputs, and manage execution context.
+Tasks also define completion and reset semantics:
+
+```python
+def is_complete(self) -> bool: ...
+def reset(self) -> None: ...
+```
 
 ### Contract
 
-- Implement `run()` to define execution logic
-- Implement `is_complete` to define when the task is considered done (i.e. if all artifacts exist)
-- Implement `reset` to reset the task state.
-- Validate input artifacts before execution
-- Raise errors for missing artifacts or failed execution
-- The `kind` field declared on your task class (e.g. `kind: Literal["my_task"] = "my_task"`) is used by Pydantic as the discriminator in `TaskUnion`.
+- `run()` is asynchronous
+- `is_complete()` determines whether the task can be skipped
+- `reset()` clears task outputs so the task can run again
+- `kind: str` is the registry discriminator
+- `executor` and `runtime` must be compatible
 
-## Built-in Tasks
-
-The SDK provides a standard task implementation:
-
-- `HorusTask` - Basic Horus runtime task. Validates inputs and delegates execution to the executor and runtime.
-
-### Example
-
-```python
-class HorusTask(BaseTask):
-    kind: Literal["horus_task"] = "horus_task"
-
-    def run(self) -> None:
-        for input_name, artifact in self.inputs.items():
-            if not artifact.exists():
-                raise ArtifactDoesNotExistError(
-                    f"Input artifact {input_name} does not exist"
-                )
-        return_code = self.executor.execute(self)
-        if return_code != 0:
-            raise TaskExecutionError(
-                f"Task execution failed with return code {return_code}"
-            )
-
-    def is_complete(self) -> bool:
-        """
-        A HorusTask is considered complete if all of its output artifacts
-        exist.
-        """
-
-        # If no outputs are declared, we consider the task incomplete and
-        # always run it
-        if not self.outputs:
-            return False
-
-        for artifact in self.outputs.values():
-            if not artifact.exists():
-                return False
-
-        return True
-```
+Runtime compatibility is validated automatically after model construction. An
+invalid executor/runtime pair raises `IncompatibleRuntimeError`.
 
 ## Base Task
 
@@ -78,15 +44,19 @@ All tasks inherit from `BaseTask`:
 ```python
 class BaseTask(AutoRegistry, entry_point="task"):
     registry_key: ClassVar[str] = "kind"
-    kind: Any = None
-    inputs: dict[str, ArtifactUnion] = {}
-    outputs: dict[str, ArtifactUnion] = {}
-    variables: dict[str, Any] = {}
-    executor: ExecutorUnion
-    runtime: RuntimeUnion
+    kind: str
+    task_id: str | None = None
+    name: str
+    inputs: dict[str, BaseArtifact] = Field(default_factory=dict)
+    outputs: dict[str, BaseArtifact] = Field(default_factory=dict)
+    variables: dict[str, Any] = Field(default_factory=dict)
+    executor: BaseExecutor
+    runtime: BaseRuntime
+    runs: int = 0
+    skip_if_complete: bool = True
 
     @abstractmethod
-    def run(self) -> None:
+    async def run(self) -> None:
         pass
 
     @abstractmethod
@@ -96,15 +66,48 @@ class BaseTask(AutoRegistry, entry_point="task"):
     @abstractmethod
     def reset(self) -> None:
         pass
-
 ```
 
-## Registering custom tasks
+## Built-in Tasks
 
-To register and discover task plugins within the Horus runtime, use the following entry point:
+- `HorusTask`: the standard task implementation for command-style execution
+- `FunctionTask`: a code-first task that wraps a Python function and pairs it
+  with `PythonFunctionRuntime` and `PythonFunctionExecutor`
+
+## `HorusTask`
+
+`HorusTask` provides the default task behavior:
+
+- Emits task start and completion events
+- Validates that declared input artifacts exist before execution
+- Delegates execution to the configured executor
+- Raises `TaskExecutionError` on non-zero return codes
+- Treats a task as complete when all declared output artifacts exist
+
+If a task declares no outputs, `HorusTask.is_complete()` returns `False`, so the
+task always runs unless your workflow adds different logic.
+
+## `FunctionTask`
+
+`FunctionTask` is the simplest way to build an in-memory workflow in Python:
+
+```python
+@FunctionTask.task(wf)
+def prepare_data() -> None:
+    ...
+```
+
+The decorator creates a `FunctionTask`, wraps the function in a
+`PythonFunctionRuntime`, and registers the task in the workflow automatically.
+
+See [FunctionTask](./function-task.md) for the full guide and examples.
+
+## Registering Custom Tasks
+
+To register task plugins, expose them through:
 
 ```toml
 [project.entry-points."horus.task"]
 ```
 
-For more details, refer to the [AutoRegistry documentation](../plugin-system/autoregistry.md).
+For more details, refer to the [Auto-Registry documentation](../plugin-system/autoregistry.md).

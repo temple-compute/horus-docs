@@ -61,7 +61,7 @@ Every artifact must define:
 - `materialize()` → Ensure the artifact is locally available.
 - `hash` → Deterministic content hash.
 - `delete()` → Deletes the artifact.
-- The `kind` field declared on your artifact class (e.g. `kind: Literal["my_artifact"] = "my_artifact"`) is used by Pydantic as the discriminator in `ArtifactUnion`.
+- `kind: str` → Concrete discriminator value for the artifact type
 
 ## Artifact Resolution
 
