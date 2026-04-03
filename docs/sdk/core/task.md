@@ -33,6 +33,7 @@ def reset(self) -> None: ...
 - `reset()` clears task outputs so the task can run again
 - `kind: str` is the registry discriminator
 - `executor` and `runtime` must be compatible
+- `interaction` can carry a task-level runtime prompt transport
 
 Runtime compatibility is validated automatically after model construction. An
 invalid executor/runtime pair raises `IncompatibleRuntimeError`.
@@ -54,6 +55,7 @@ class BaseTask(AutoRegistry, entry_point="task"):
     runtime: BaseRuntime
     runs: int = 0
     skip_if_complete: bool = True
+    interaction: BaseInteractionTransport | None = None
 
     @abstractmethod
     async def run(self) -> None:
@@ -99,6 +101,9 @@ def prepare_data() -> None:
 
 The decorator creates a `FunctionTask`, wraps the function in a
 `PythonFunctionRuntime`, and registers the task in the workflow automatically.
+
+It also defaults `interaction` to the built-in CLI transport, which makes
+interactive code-first tasks easy to author.
 
 See [FunctionTask](./function-task.md) for the full guide and examples.
 

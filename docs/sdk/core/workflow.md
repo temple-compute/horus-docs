@@ -41,7 +41,6 @@ class BaseWorkflow(AutoRegistry, entry_point="workflow"):
     kind: str
     name: str
     tasks: dict[str, BaseTask] = Field(default_factory=dict)
-    input: BaseInput = CLIInput()
 
     @classmethod
     @abstractmethod
@@ -77,12 +76,11 @@ wf = HorusWorkflow(name="example")
 asyncio.run(wf.run())
 ```
 
-## Interactive Input
+## Task IDs
 
-Workflows expose an `input` field used for interactive prompting at runtime.
-The default implementation is `CLIInput`.
+Each task receives its `task_id` from the key used in the workflow's `tasks`
+mapping. This keeps task IDs aligned with workflow registration keys.
 
-See [Input](./input.md) for details.
 
 ## Registering Custom Workflows
 

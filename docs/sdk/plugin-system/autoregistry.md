@@ -13,7 +13,7 @@ through Python entry points.
 ## Features
 
 - Automatic discovery of `Artifact`, `Task`, `Runtime`, `Executor`, `Workflow`,
-  and `Input` types
+  `Interaction`, `InteractionTransport`, and `InteractionRenderer` types
 - Pydantic-backed discriminator lookup using `kind`
 - Extensible architecture for third-party integrations
 
@@ -67,7 +67,9 @@ Plugins are exposed through Python entry points in `pyproject.toml`.
 | `horus.runtime`   | Runtime plugins  | `command`        | `horus_builtin.runtime.command`       |
 | `horus.executor`  | Executor plugins | `shell`          | `horus_builtin.executor.shell`        |
 | `horus.workflow`  | Workflow plugins | `horus_workflow` | `horus_builtin.workflow.horus_workflow` |
-| `horus.input`     | Input plugins    | `cli`            | `horus_builtin.input.cli`             |
+| `horus.interaction` | Interaction plugins | `common`      | `horus_builtin.interaction.common`    |
+| `horus.interaction_transport` | Interaction transport plugins | `cli` | `horus_builtin.interaction.cli` |
+| `horus.interaction_renderer` | Interaction renderer plugins | `cli` | `horus_builtin.interaction.cli` |
 
 Example built-in configuration:
 
@@ -92,8 +94,14 @@ horus_task = "horus_builtin.task.horus_task"
 [project.entry-points."horus.workflow"]
 horus_workflow = "horus_builtin.workflow.horus_workflow"
 
-[project.entry-points."horus.input"]
-cli = "horus_builtin.input.cli"
+[project.entry-points."horus.interaction"]
+common = "horus_builtin.interaction.common"
+
+[project.entry-points."horus.interaction_transport"]
+cli = "horus_builtin.interaction.cli"
+
+[project.entry-points."horus.interaction_renderer"]
+cli = "horus_builtin.interaction.cli"
 ```
 
 ## Setting Up Plugins
