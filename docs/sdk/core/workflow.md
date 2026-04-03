@@ -56,9 +56,6 @@ class BaseWorkflow(AutoRegistry, entry_point="workflow"):
         pass
 ```
 
-Each task receives its `task_id` from the key used in the workflow's `tasks`
-mapping.
-
 ## Built-in Workflow
 
 - `HorusWorkflow`: runs tasks in definition order and skips tasks whose

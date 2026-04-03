@@ -54,25 +54,10 @@ wf = HorusWorkflow(name="my_workflow")
 
 @FunctionTask.task(wf)
 def my_task() -> None:
-        print("Hello, Horus!")
+    print("Hello, Horus!")
 
 
 asyncio.run(wf.run())
-```
-
-## Important Behavior
-
-### Input artifacts are validated before execution
-
-`FunctionTask` reuses `HorusTask.run()`, so declared input artifacts are
-checked before execution.
-
-That means this works:
-
-```python
-@FunctionTask.task(wf, inputs={"data": FileArtifact(path="data.txt")})
-def process() -> None:
-    ...
 ```
 
 ### The task instance is passed when the function accepts one parameter
@@ -81,7 +66,11 @@ If the wrapped callable declares a parameter, Horus passes the current task as
 the first argument.
 
 ```python
+from horus_builtin.artifact.file import FileArtifact
 from horus_builtin.task.function import FunctionTask
+from horus_builtin.workflow.horus_workflow import HorusWorkflow
+
+wf = HorusWorkflow(name="my_workflow")
 
 @FunctionTask.task(wf, inputs={"data": FileArtifact(path="data.txt")})
 def process(task: FunctionTask) -> None:
