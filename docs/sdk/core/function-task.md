@@ -14,6 +14,9 @@ runtime and executor, and registers it into a workflow with a decorator.
 - Zero-boilerplate task creation for Python functions
 - Automatic task registration in a workflow
 - In-process execution without spawning a shell
+- Support for both sync and async Python callables
+- Automatic task injection when the wrapped callable accepts one parameter
+- A default CLI interaction transport for interactive tasks
 - The usual `HorusTask` behavior for input validation, output-based skip logic,
   events, and reset support
 
@@ -42,80 +45,85 @@ The decorator:
 ```python
 import asyncio
 
-from horus_builtin.artifact.file import FileArtifact
-from horus_builtin.executor.shell import ShellExecutor
-from horus_builtin.runtime.command import CommandRuntime
 from horus_builtin.task.function import FunctionTask
-from horus_builtin.task.horus_task import HorusTask
 from horus_builtin.workflow.horus_workflow import HorusWorkflow
 from horus_runtime.context import HorusContext
-from horus_runtime.logging import horus_logger
-
-horus_logger.set_level("DEBUG")
 
 ctx = HorusContext.boot()
-
 wf = HorusWorkflow(name="my_workflow")
 
-
-@FunctionTask.task(
-    wf,
-    outputs={"data_file": FileArtifact(path="data.txt")},
-)
-def prepare_data() -> None:
-    with open("data.txt", "w", encoding="utf-8") as f:
-        f.write("This is some sample data for the workflow.\n")
-        f.write("You can replace this with actual data processing logic.\n")
-
-
-execute_data_task = HorusTask(
-    name="task1",
-    outputs={"output1": FileArtifact(path="data.txt")},
-    executor=ShellExecutor(),
-    runtime=CommandRuntime(command="echo 'Hello, from task1!' >> data.txt"),
-    skip_if_complete=False,
-)
-wf.tasks[execute_data_task.name] = execute_data_task
-
-
-@FunctionTask.task(
-    wf,
-    inputs={"data_file": FileArtifact(path="data.txt")},
-)
-def read_results() -> None:
-    with open("data.txt", encoding="utf-8") as f:
-        print(f.read())
+@FunctionTask.task(wf)
+def my_task() -> None:
+    print("Hello, Horus!")
 
 
 asyncio.run(wf.run())
 ```
 
-## Important Behavior
+### The task instance is passed when the function accepts one parameter
 
-### Inputs are validated, not injected
-
-`FunctionTask` reuses `HorusTask.run()`, so declared input artifacts are checked
-before execution. The wrapped function itself is currently called with no
-arguments.
-
-That means this works:
+If the wrapped callable declares a parameter, Horus passes the current task as
+the first argument.
 
 ```python
+from horus_builtin.artifact.file import FileArtifact
+from horus_builtin.task.function import FunctionTask
+from horus_builtin.workflow.horus_workflow import HorusWorkflow
+
+wf = HorusWorkflow(name="my_workflow")
+
 @FunctionTask.task(wf, inputs={"data": FileArtifact(path="data.txt")})
-def process() -> None:
+def process(task: FunctionTask) -> None:
+    data_artifact = task.inputs["data"]
+    print(data_artifact)
+```
+
+This gives function-based tasks access to:
+
+- `task.inputs`
+- `task.outputs`
+- `task.variables`
+- `task.interaction`
+- `task.name` and `task.task_id`
+
+### Async callables are supported
+
+`PythonFunctionExecutor` detects awaitable return values and awaits them.
+
+```python
+@FunctionTask.task(wf)
+async def fetch_data() -> None:
     ...
 ```
 
-But this is not currently how `FunctionTask` executes:
+### Interactions are available through the task
+
+`FunctionTask` defaults `interaction` to `CLIInteractionTransport()`.
+
+This is useful for code-first workflows that need to prompt the user at
+runtime:
 
 ```python
-@FunctionTask.task(wf, inputs={"data": FileArtifact(path="data.txt")})
-def process(data: FileArtifact) -> None:
-    ...
-```
+from horus_builtin.interaction.common.confirm import ConfirmInteraction
+from horus_builtin.task.function import FunctionTask
 
-If you need artifact access inside the function, open the artifact path
-yourself or capture what you need in Python when defining the function.
+
+@FunctionTask.task(wf)
+async def confirm_run(task: FunctionTask) -> None:
+    assert task.interaction is not None
+
+    should_continue = await task.interaction.ask(
+        ConfirmInteraction(
+            value_key="run-confirmation",
+            title="Run workflow",
+            prompt="Do you want to continue?",
+            default=True,
+        )
+    )
+
+    if not should_continue:
+        raise RuntimeError("User cancelled execution")
+```
 
 ### Return values are ignored
 
@@ -153,7 +161,8 @@ declared output artifacts exist. If no outputs are declared, it always runs.
 `FunctionTask` is a thin convenience wrapper around:
 
 - `PythonFunctionRuntime`: stores the callable
-- `PythonFunctionExecutor`: calls the callable in-process
+- `PythonFunctionExecutor`: calls the callable in-process, injecting the task
+  when needed and awaiting async results
 - `HorusTask`: preserves Horus task lifecycle behavior
 
 ## When To Use It
