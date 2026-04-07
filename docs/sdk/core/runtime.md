@@ -48,7 +48,8 @@ to return more than strings, such as Python callables for in-process execution.
 ## Built-in Runtimes
 
 - `CommandRuntime`: formats and returns a shell command string
-- `PythonFunctionRuntime`: stores a Python callable and returns it unchanged
+- `PythonFunctionRuntime`: stores a Python callable and prepares a tuple of
+  `(callable, kwargs)` for execution
 - `PythonCodeStringRuntime`: returns a Python code string for in-process
   execution with `exec()`
 
@@ -81,6 +82,17 @@ runtime2 = PythonCodeStringRuntime(
     code="result = 1 + 1\nprint(result)"
 )
 ```
+
+`PythonFunctionRuntime` builds keyword arguments from:
+
+- `task`
+- declared input artifacts (`inputs`)
+- declared output artifacts (`outputs`)
+- `task.variables`
+
+When the callable does not declare `**kwargs`, Horus validates that every
+declared function parameter can be satisfied from that context and raises a
+`ValueError` for missing names.
 
 ## Registering Custom Runtimes
 
