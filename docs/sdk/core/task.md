@@ -101,8 +101,9 @@ def prepare_data() -> None:
 
 The decorator creates a `FunctionTask`, wraps the function in a
 `PythonFunctionRuntime`, and registers the task in the workflow automatically.
-Function parameters are injected by name from `task`, declared `inputs`,
-declared `outputs`, and `variables`.
+Function parameters are injected by name: `task` is available directly (positional argument), and
+other parameters are matched against keys (keyword arguments) in declared `inputs`, declared
+`outputs`, and `task.variables`.
 
 It also defaults `interaction` to the built-in CLI transport, which makes
 interactive code-first tasks easy to author.

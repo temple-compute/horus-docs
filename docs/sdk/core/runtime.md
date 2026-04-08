@@ -90,9 +90,9 @@ runtime2 = PythonCodeStringRuntime(
 - declared output artifacts (`outputs`)
 - `task.variables`
 
-When the callable does not declare `**kwargs`, Horus validates that every
-declared function parameter can be satisfied from that context and raises a
-`ValueError` for missing names.
+When the callable does not declare `**kwargs`, `PythonFunctionRuntime`
+validates during `setup_runtime()` that every declared function parameter can
+be satisfied from that context and raises a `ValueError` for missing names.
 
 ## Registering Custom Runtimes
 
