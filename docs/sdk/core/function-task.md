@@ -15,7 +15,8 @@ runtime and executor, and registers it into a workflow with a decorator.
 - Automatic task registration in a workflow
 - In-process execution without spawning a shell
 - Support for both sync and async Python callables
-- Automatic task injection when the wrapped callable accepts one parameter
+- Named argument injection from task context (`task`, `inputs`, `outputs`,
+  `variables`)
 - A default CLI interaction transport for interactive tasks
 - The usual `HorusTask` behavior for input validation, output-based skip logic,
   events, and reset support
@@ -28,6 +29,7 @@ runtime and executor, and registers it into a workflow with a decorator.
     name=None,
     inputs=None,
     outputs=None,
+    variables=None,
 )
 def my_step() -> None:
     ...
@@ -38,7 +40,8 @@ The decorator:
 1. creates a `FunctionTask`
 2. wraps the function in `PythonFunctionRuntime`
 3. uses `PythonFunctionExecutor` by default
-4. inserts the task into `wf.tasks`
+4. syncs `task_id` with the final task name
+5. inserts the task into `wf.tasks` using `task_id` as the key
 
 ## Basic Example
 
@@ -60,10 +63,16 @@ def my_task() -> None:
 asyncio.run(wf.run())
 ```
 
-### The task instance is passed when the function accepts one parameter
+### Parameters Are Injected By Name
 
-If the wrapped callable declares a parameter, Horus passes the current task as
-the first argument.
+`FunctionTask` callables can declare any subset of these names:
+
+- `task`: the full `FunctionTask` instance
+- any key from `inputs`
+- any key from `outputs`
+- any key from `variables`
+
+Horus matches parameters by name and calls your function with keyword args.
 
 ```python
 from horus_builtin.artifact.file import FileArtifact
@@ -72,19 +81,26 @@ from horus_builtin.workflow.horus_workflow import HorusWorkflow
 
 wf = HorusWorkflow(name="my_workflow")
 
-@FunctionTask.task(wf, inputs={"data": FileArtifact(path="data.txt")})
-def process(task: FunctionTask) -> None:
-    data_artifact = task.inputs["data"]
-    print(data_artifact)
+@FunctionTask.task(
+    wf,
+    inputs={"input_file": FileArtifact(path="data.txt")},
+    outputs={"output_file": FileArtifact(path="result.txt")},
+    variables={"uppercase": True},
+)
+def process(
+    input_file: FileArtifact,
+    output_file: FileArtifact,
+    uppercase: bool,
+    task: FunctionTask,
+) -> None:
+    content = input_file.path.read_text()
+    output_file.path.write_text(content.upper() if uppercase else content)
+    print(task.task_id)
 ```
 
-This gives function-based tasks access to:
-
-- `task.inputs`
-- `task.outputs`
-- `task.variables`
-- `task.interaction`
-- `task.name` and `task.task_id`
+If your function declares a parameter name that is not available from that
+context, Horus raises a `ValueError` during runtime setup. If you declare
+`**kwargs`, Horus passes all available values.
 
 ### Async callables are supported
 
@@ -161,8 +177,8 @@ declared output artifacts exist. If no outputs are declared, it always runs.
 `FunctionTask` is a thin convenience wrapper around:
 
 - `PythonFunctionRuntime`: stores the callable
-- `PythonFunctionExecutor`: calls the callable in-process, injecting the task
-  when needed and awaiting async results
+- `PythonFunctionExecutor`: calls the callable in-process with keyword args
+  prepared by `PythonFunctionRuntime`, and awaits async results
 - `HorusTask`: preserves Horus task lifecycle behavior
 
 ## When To Use It
