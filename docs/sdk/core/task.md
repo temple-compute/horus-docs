@@ -1,38 +1,36 @@
 ---
-sidebar_position: 4
+sidebar_position: 5
 title: Task
 ---
 
 # Task System
 
 Tasks are the unit of work in Horus. A task binds together its input and output
-artifacts, execution variables, executor, and runtime.
+artifacts, execution variables, runtime, executor, and target.
 
 ## Core Concept
 
-Every task implements:
+Every task must implement all three abstract methods:
 
 ```python
-async def run(self) -> None:
-    """
-    Execute the task.
-    """
-```
+async def _run(self) -> None:
+    ...
 
-Tasks also define completion and reset semantics:
+def is_complete(self) -> bool:
+    ...
 
-```python
-def is_complete(self) -> bool: ...
-def reset(self) -> None: ...
+def _reset(self) -> None:
+    ...
 ```
 
 ### Contract
 
-- `run()` is asynchronous
-- `is_complete()` determines whether the task can be skipped
-- `reset()` clears task outputs so the task can run again
+- `_run()` — task-specific execution logic; do not mutate `status` here
+- `is_complete()` — return `True` when all output artifacts are present and valid; used to skip already-complete tasks when `skip_if_complete=True`
+- `_reset()` — clear any subclass-specific state so the task can re-run; do not mutate `status` here
 - `kind: str` is the registry discriminator
 - `executor` and `runtime` must be compatible
+- `target` decides where the task is dispatched
 - `interaction` can carry a task-level runtime prompt transport
 
 Runtime compatibility is validated automatically after model construction. An
@@ -53,22 +51,40 @@ class BaseTask(AutoRegistry, entry_point="task"):
     variables: dict[str, Any] = Field(default_factory=dict)
     executor: BaseExecutor
     runtime: BaseRuntime
+    target: BaseTarget
+    status: TaskStatus = TaskStatus.IDLE
     runs: int = 0
     skip_if_complete: bool = True
     interaction: BaseInteractionTransport | None = None
 
-    @abstractmethod
+    @final
     async def run(self) -> None:
-        pass
+        """Drives status transitions: RUNNING → COMPLETED | CANCELED | FAILED."""
+        ...
+
+    async def sync_status(self) -> TaskStatus:
+        """Refresh self.status from the target and return the updated value."""
+        ...
+
+    @abstractmethod
+    async def _run(self) -> None:
+        """Task-specific execution logic. Do not set self.status here."""
 
     @abstractmethod
     def is_complete(self) -> bool:
-        pass
+        """Return True when output artifacts are present and valid."""
+
+    @final
+    def reset(self) -> None:
+        """Reset status to IDLE and delegate to _reset()."""
+        ...
 
     @abstractmethod
-    def reset(self) -> None:
-        pass
+    def _reset(self) -> None:
+        """Subclass-specific reset logic. Do not set self.status here."""
 ```
+
+Subclasses must implement `_run()`, `is_complete()`, and `_reset()`.
 
 ## Built-in Tasks
 
@@ -82,9 +98,13 @@ class BaseTask(AutoRegistry, entry_point="task"):
 
 - Emits task start and completion events
 - Validates that declared input artifacts exist before execution
-- Delegates execution to the configured executor
+- Delegates placement to the configured target
+- Delegates execution to the configured executor once running on that target
 - Raises `TaskExecutionError` on non-zero return codes
 - Treats a task as complete when all declared output artifacts exist
+
+The default `HorusTask.target` is `LocalTarget`, so tasks run in-process unless
+you provide a different target.
 
 If a task declares no outputs, `HorusTask.is_complete()` returns `False`, so the
 task always runs unless your workflow adds different logic.

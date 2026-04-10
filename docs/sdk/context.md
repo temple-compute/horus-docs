@@ -95,7 +95,7 @@ from horus_runtime.core.task.base import BaseTask
 class MyTask(BaseTask):
     kind: str = "my_task"
 
-    async def run(self) -> None:
+    async def _run(self) -> None:
         ctx = HorusContext.get_context()
         ctx.bus.emit(MyEvent(message="task started"))
 ```

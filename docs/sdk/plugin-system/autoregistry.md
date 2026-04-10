@@ -12,8 +12,9 @@ through Python entry points.
 
 ## Features
 
-- Automatic discovery of `Artifact`, `Task`, `Runtime`, `Executor`, `Workflow`,
-  `Interaction`, `InteractionTransport`, and `InteractionRenderer` types
+- Automatic discovery of `Artifact`, `Task`, `Runtime`, `Executor`, `Target`,
+  `Workflow`, `Interaction`, `InteractionTransport`, and
+  `InteractionRenderer` types
 - Pydantic-backed discriminator lookup using `kind`
 - Extensible architecture for third-party integrations
 
@@ -66,6 +67,7 @@ Plugins are exposed through Python entry points in `pyproject.toml`.
 | `horus.task`      | Task plugins     | `horus_task`     | `horus_builtin.task.horus_task`       |
 | `horus.runtime`   | Runtime plugins  | `command`        | `horus_builtin.runtime.command`       |
 | `horus.executor`  | Executor plugins | `shell`          | `horus_builtin.executor.shell`        |
+| `horus.target`    | Target plugins   | `local`          | `horus_builtin.target.local`          |
 | `horus.workflow`  | Workflow plugins | `horus_workflow` | `horus_builtin.workflow.horus_workflow` |
 | `horus.interaction` | Interaction plugins | `common`      | `horus_builtin.interaction.common`    |
 | `horus.interaction_transport` | Interaction transport plugins | `cli` | `horus_builtin.interaction.cli` |
@@ -90,6 +92,9 @@ python = "horus_builtin.runtime.python"
 
 [project.entry-points."horus.task"]
 horus_task = "horus_builtin.task.horus_task"
+
+[project.entry-points."horus.target"]
+local = "horus_builtin.target.local"
 
 [project.entry-points."horus.workflow"]
 horus_workflow = "horus_builtin.workflow.horus_workflow"

@@ -6,13 +6,20 @@ sidebar_position: 1
 # Runtime SDK
 
 The Horus runtime provides an extensible SDK for defining artifacts, runtimes,
-executors, tasks, workflows, and interactive runtime interactions.
+executors, targets, tasks, workflows, and interactive runtime interactions.
+
+At a high level:
+
+- `Runtime` defines what should run
+- `Executor` defines how it runs
+- `Target` defines where it runs
 
 ## Core Abstractions
 
 - [Artifact](./core/artifact.md)
 - [Executor](./core/executor.md)
 - [Runtime](./core/runtime.md)
+- [Target](./core/target.md)
 - [Task](./core/task.md)
 - [FunctionTask](./core/function-task.md)
 - [Interaction](./core/interaction.md)

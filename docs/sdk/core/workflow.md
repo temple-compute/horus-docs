@@ -1,5 +1,5 @@
 ---
-sidebar_position: 7
+sidebar_position: 8
 title: Workflow
 ---
 
@@ -13,22 +13,25 @@ responsibility.
 
 ## Core Concept
 
-Every workflow implements:
+Every workflow must implement all three abstract methods:
 
 ```python
 @classmethod
-def from_yaml(cls, path: str | Path) -> Self: ...
+def from_yaml(cls, path: str | Path) -> Self:
+    ...
 
-async def run(self) -> None: ...
+async def _run(self) -> None:
+    ...
 
-def reset(self) -> None: ...
+def _reset(self) -> None:
+    ...
 ```
 
 ### Contract
 
-- `from_yaml()` loads a workflow definition
-- `run()` is asynchronous
-- `reset()` clears task state so the workflow can be re-run
+- `from_yaml()`: load and construct a workflow from a YAML file
+- `_run()`: workflow-specific execution logic; do not mutate `status` here
+- `_reset()`: subclass-specific reset logic; do not mutate `status` here
 - `kind: str` is the registry discriminator
 
 ## Base Workflow
@@ -41,25 +44,49 @@ class BaseWorkflow(AutoRegistry, entry_point="workflow"):
     kind: str
     name: str
     tasks: dict[str, BaseTask] = Field(default_factory=dict)
+    status: WorkflowStatus = WorkflowStatus.IDLE
 
     @classmethod
     @abstractmethod
     def from_yaml(cls, path: str | Path) -> Self:
-        pass
+        """
+        Load and construct a workflow from a YAML file.
+        """
 
-    @abstractmethod
+    @final
     async def run(self) -> None:
-        pass
+        """
+        Drives status transitions: RUNNING → COMPLETED | CANCELED | FAILED.
+        """
+        ...
 
     @abstractmethod
+    async def _run(self) -> None:
+        """Workflow-specific execution logic. Do not set self.status here."""
+
+    @final
     def reset(self) -> None:
-        pass
+        """
+        Reset status to IDLE and delegate to _reset().
+        """
+        ...
+
+    @abstractmethod
+    def _reset(self) -> None:
+        """
+        Subclass-specific reset logic. Do not set self.status here.
+        """
 ```
+
+Subclasses must implement `from_yaml()`, `_run()`, and `_reset()`.
 
 ## Built-in Workflow
 
 - `HorusWorkflow`: runs tasks in definition order and skips tasks whose
   outputs already exist when `task.skip_if_complete` is `True`
+
+`HorusWorkflow` dispatches each task through `task.target`, then waits for that
+target to report completion before moving to the next task.
 
 ## Example
 
@@ -77,7 +104,6 @@ asyncio.run(wf.run())
 
 Each task receives its `task_id` from the key used in the workflow's `tasks`
 mapping. This keeps task IDs aligned with workflow registration keys.
-
 
 ## Registering Custom Workflows
 
