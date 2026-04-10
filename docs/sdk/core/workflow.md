@@ -13,23 +13,25 @@ responsibility.
 
 ## Core Concept
 
-Every workflow implements:
+Every workflow must implement all three abstract methods:
 
 ```python
 @classmethod
-def from_yaml(cls, path: str | Path) -> Self: ...
+def from_yaml(cls, path: str | Path) -> Self:
+    ...
 
-async def run(self) -> None: ...
-async def _run(self) -> None: ...
+async def _run(self) -> None:
+    ...
 
-def reset(self) -> None: ...
+def _reset(self) -> None:
+    ...
 ```
 
 ### Contract
 
-- `from_yaml()` loads a workflow definition
-- `_run()` contains workflow-specific execution logic
-- `reset()` clears task state so the workflow can be re-run
+- `from_yaml()`: load and construct a workflow from a YAML file
+- `_run()`: workflow-specific execution logic; do not mutate `status` here
+- `_reset()`: subclass-specific reset logic; do not mutate `status` here
 - `kind: str` is the registry discriminator
 
 ## Base Workflow
@@ -47,21 +49,36 @@ class BaseWorkflow(AutoRegistry, entry_point="workflow"):
     @classmethod
     @abstractmethod
     def from_yaml(cls, path: str | Path) -> Self:
-        pass
+        """
+        Load and construct a workflow from a YAML file.
+        """
 
+    @final
     async def run(self) -> None:
+        """
+        Drives status transitions: RUNNING → COMPLETED | CANCELED | FAILED.
+        """
         ...
 
     @abstractmethod
     async def _run(self) -> None:
-        pass
+        """Workflow-specific execution logic. Do not set self.status here."""
+
+    @final
+    def reset(self) -> None:
+        """
+        Reset status to IDLE and delegate to _reset().
+        """
+        ...
 
     @abstractmethod
-    def reset(self) -> None:
-        pass
+    def _reset(self) -> None:
+        """
+        Subclass-specific reset logic. Do not set self.status here.
+        """
 ```
 
-Subclasses implement `_run()` and should treat `run()` as the orchestration wrapper.
+Subclasses must implement `from_yaml()`, `_run()`, and `_reset()`.
 
 ## Built-in Workflow
 

@@ -10,25 +10,24 @@ artifacts, execution variables, runtime, executor, and target.
 
 ## Core Concept
 
-Every task must implement:
+Every task must implement all three abstract methods:
 
 ```python
 async def _run(self) -> None:
     ...
-```
 
-Tasks also define completion and reset semantics:
+def is_complete(self) -> bool:
+    ...
 
-```python
-def is_complete(self) -> bool: ...
-def reset(self) -> None: ...
+def _reset(self) -> None:
+    ...
 ```
 
 ### Contract
 
-- `_run()` contains task-specific execution logic
-- `is_complete()` determines whether the task can be skipped
-- `reset()` clears task outputs so the task can run again
+- `_run()` — task-specific execution logic; do not mutate `status` here
+- `is_complete()` — return `True` when all output artifacts are present and valid; used to skip already-complete tasks when `skip_if_complete=True`
+- `_reset()` — clear any subclass-specific state so the task can re-run; do not mutate `status` here
 - `kind: str` is the registry discriminator
 - `executor` and `runtime` must be compatible
 - `target` decides where the task is dispatched
@@ -58,22 +57,34 @@ class BaseTask(AutoRegistry, entry_point="task"):
     skip_if_complete: bool = True
     interaction: BaseInteractionTransport | None = None
 
+    @final
     async def run(self) -> None:
+        """Drives status transitions: RUNNING → COMPLETED | CANCELED | FAILED."""
+        ...
+
+    async def sync_status(self) -> TaskStatus:
+        """Refresh self.status from the target and return the updated value."""
         ...
 
     @abstractmethod
     async def _run(self) -> None:
-        pass
+        """Task-specific execution logic. Do not set self.status here."""
 
     @abstractmethod
     def is_complete(self) -> bool:
-        pass
+        """Return True when output artifacts are present and valid."""
 
+    @final
     def reset(self) -> None:
-        pass
+        """Reset status to IDLE and delegate to _reset()."""
+        ...
+
+    @abstractmethod
+    def _reset(self) -> None:
+        """Subclass-specific reset logic. Do not set self.status here."""
 ```
 
-Subclasses implement `_run()` and should not mutate `status` directly during normal execution.
+Subclasses must implement `_run()`, `is_complete()`, and `_reset()`.
 
 ## Built-in Tasks
 
