@@ -1,5 +1,5 @@
 ---
-sidebar_position: 7
+sidebar_position: 8
 title: Workflow
 ---
 
@@ -20,6 +20,7 @@ Every workflow implements:
 def from_yaml(cls, path: str | Path) -> Self: ...
 
 async def run(self) -> None: ...
+async def _run(self) -> None: ...
 
 def reset(self) -> None: ...
 ```
@@ -27,7 +28,7 @@ def reset(self) -> None: ...
 ### Contract
 
 - `from_yaml()` loads a workflow definition
-- `run()` is asynchronous
+- `_run()` contains workflow-specific execution logic
 - `reset()` clears task state so the workflow can be re-run
 - `kind: str` is the registry discriminator
 
@@ -41,14 +42,18 @@ class BaseWorkflow(AutoRegistry, entry_point="workflow"):
     kind: str
     name: str
     tasks: dict[str, BaseTask] = Field(default_factory=dict)
+    status: WorkflowStatus = WorkflowStatus.IDLE
 
     @classmethod
     @abstractmethod
     def from_yaml(cls, path: str | Path) -> Self:
         pass
 
-    @abstractmethod
     async def run(self) -> None:
+        ...
+
+    @abstractmethod
+    async def _run(self) -> None:
         pass
 
     @abstractmethod
@@ -56,10 +61,15 @@ class BaseWorkflow(AutoRegistry, entry_point="workflow"):
         pass
 ```
 
+Subclasses implement `_run()` and should treat `run()` as the orchestration wrapper.
+
 ## Built-in Workflow
 
 - `HorusWorkflow`: runs tasks in definition order and skips tasks whose
   outputs already exist when `task.skip_if_complete` is `True`
+
+`HorusWorkflow` dispatches each task through `task.target`, then waits for that
+target to report completion before moving to the next task.
 
 ## Example
 
@@ -77,7 +87,6 @@ asyncio.run(wf.run())
 
 Each task receives its `task_id` from the key used in the workflow's `tasks`
 mapping. This keeps task IDs aligned with workflow registration keys.
-
 
 ## Registering Custom Workflows
 

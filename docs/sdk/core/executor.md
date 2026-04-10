@@ -5,24 +5,22 @@ title: Executor
 
 # Executor System
 
-Executors define where and how a task runs. A task supplies the unit of work,
-and the executor is responsible for actually running it against a compatible
-runtime.
+Executors define how a task runs once it has been dispatched to a target. A
+task supplies the unit of work, the runtime prepares the payload, and the
+executor is responsible for invoking that payload in a compatible way.
 
 ## Core Concept
 
 Every executor implements:
 
 ```python
-def execute(self, task: BaseTask) -> int:
-    """
-    Execute the given task and return an exit code.
-    """
+async def execute(self, task: BaseTask) -> int:
+    ...
 ```
 
 The task itself is responsible for orchestration concerns such as input
 validation, event emission, error handling, and incrementing the run counter.
-The executor focuses on execution only.
+The target owns dispatch and waiting. The executor focuses on execution only.
 
 ### Contract
 
@@ -46,7 +44,7 @@ class BaseExecutor(AutoRegistry, entry_point="executor"):
     runtimes: ClassVar[tuple[type[BaseRuntime], ...]] = (BaseRuntime,)
 
     @abstractmethod
-    def execute(self, task: BaseTask) -> int:
+    async def execute(self, task: BaseTask) -> int:
         pass
 ```
 
@@ -63,10 +61,12 @@ class BaseExecutor(AutoRegistry, entry_point="executor"):
 ```python
 from horus_builtin.executor.shell import ShellExecutor
 from horus_builtin.runtime.command import CommandRuntime
+from horus_builtin.target.local import LocalTarget
 from horus_builtin.task.horus_task import HorusTask
 
 task = HorusTask(
     name="echo",
+    target=LocalTarget(),
     executor=ShellExecutor(),
     runtime=CommandRuntime(command="echo 'hello world'"),
 )
@@ -77,10 +77,12 @@ task = HorusTask(
 ```python
 from horus_builtin.executor.python_exec import PythonExecExecutor
 from horus_builtin.runtime.python_string import PythonCodeStringRuntime
+from horus_builtin.target.local import LocalTarget
 from horus_builtin.task.horus_task import HorusTask
 
 task = HorusTask(
     name="python_step",
+    target=LocalTarget(),
     executor=PythonExecExecutor(),
     runtime=PythonCodeStringRuntime(
         code="with open('hello.txt', 'w', encoding='utf-8') as f:\n    f.write('hello\\n')"

@@ -5,8 +5,8 @@ title: Runtime
 
 # Runtime System
 
-Runtimes describe what should be executed. Executors then decide how to run
-that prepared value in a particular environment.
+Runtimes describe what should be executed. They prepare the payload that an
+executor will consume after the task has been dispatched to a target.
 
 In practice, a runtime can prepare a shell command, a Python callable, a Python
 code string, or any other executor-specific payload.
