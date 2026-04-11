@@ -59,16 +59,17 @@ When `ask()` runs, Horus:
 Renderers are registered per transport/interaction pair through a derived key:
 
 ```text
-<transport kind>:<interaction kind>
+<transport kind>.<interaction kind>
 ```
 
-For example, the built-in CLI string renderer is registered as `cli:string`.
+For example, the built-in CLI string renderer is registered as `cli.text_prompt`.
 
 The key is derived automatically at class definition time by
 [`AutoRegistryProduct`](../plugin-system/auto_registry_product.md). Concrete
 renderer subclasses only need to assign `handles_transport` and
-`handles_interaction`; the mixin composes the key from those types' `kind`
-defaults.
+`handles_interaction`; the mixin composes the key from those types'
+`registry_key` defaults, which for transports and interactions typically match
+their `kind` values.
 
 ## Built-in Interactions
 

@@ -43,7 +43,7 @@ form:
 
 At subclass definition time `AutoRegistryProduct.__init_subclass__` reads each
 attribute, looks up its **`registry_key` field default** from Pydantic
-`model_fields`, joins those defaults with `:`, writes the result to
+`model_fields`, joins those defaults with `.`, writes the result to
 `<field_name>`, and then delegates to `AutoRegistry.__init_subclass__` so
 normal registration proceeds.
 
@@ -80,8 +80,8 @@ class MyCLITextRenderer(
 
 1. `registry_key` on the base is `"render_key:handles_transport.handles_interaction"`.
 2. `AutoRegistryProduct` splits on the first `:` → `field_name = "render_key"`, `raw_attrs = "handles_transport.handles_interaction"`.
-3. For `handles_transport` → resolves to `CLITransport` → reads `CLITransport.model_fields["kind"].default` → e.g. `"cli"`.
-4. For `handles_interaction` → resolves to `TextPromptInteraction` → reads `TextPromptInteraction.model_fields["kind"].default` → e.g. `"text_prompt"`.
+3. For `handles_transport` → resolves to `CLITransport` → reads `CLITransport.registry_key` (in this renderer example, `"kind"`) → then reads `CLITransport.model_fields[CLITransport.registry_key].default` → e.g. `"cli"`.
+4. For `handles_interaction` → resolves to `TextPromptInteraction` → reads `TextPromptInteraction.registry_key` (in this renderer example, `"kind"`) → then reads `TextPromptInteraction.model_fields[TextPromptInteraction.registry_key].default` → e.g. `"text_prompt"`.
 5. Sets `cls.render_key = "cli.text_prompt"` and `cls.registry_key = "render_key"`.
 6. `AutoRegistry.__init_subclass__` registers `MyCLITextRenderer` under the key `"cli.text_prompt"`.
 
