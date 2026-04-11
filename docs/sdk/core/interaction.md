@@ -64,6 +64,12 @@ Renderers are registered per transport/interaction pair through a derived key:
 
 For example, the built-in CLI string renderer is registered as `cli:string`.
 
+The key is derived automatically at class definition time by
+[`AutoRegistryProduct`](../plugin-system/auto_registry_product.md). Concrete
+renderer subclasses only need to assign `handles_transport` and
+`handles_interaction`; the mixin composes the key from those types' `kind`
+defaults.
+
 ## Built-in Interactions
 
 Horus currently includes these built-in interaction types:

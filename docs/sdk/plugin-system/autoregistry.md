@@ -16,6 +16,8 @@ through Python entry points.
   `Workflow`, `Interaction`, `InteractionTransport`, and
   `InteractionRenderer` types
 - Pydantic-backed discriminator lookup using `kind`
+- Composite discriminator keys via [`AutoRegistryProduct`](./auto_registry_product.md) for
+  registries keyed on multiple dimensions
 - Extensible architecture for third-party integrations
 
 ## How Auto-Registry Works
@@ -124,6 +126,15 @@ my_executor = "my_package.executor.my_executor"
 
 Install the package in the same environment as Horus Runtime. The registry will
 discover it automatically.
+
+## Composite Discriminator Keys
+
+Some registries need a key that combines the discriminators of multiple other
+`AutoRegistry` types. `AutoRegistryProduct` is a mixin that handles this
+automatically.
+
+See [Auto-Registry Product](./auto_registry_product.md) for the full
+explanation and usage guide.
 
 ## Custom Registries
 
