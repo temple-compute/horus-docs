@@ -12,7 +12,7 @@ The Artifact System is part the **core execution mechanism** of the Horus Runtim
 An _artifact_ represents a concrete unit of data produced or consumed by a task.
 
 **Every artifact is a file.** Regardless of what the artifact logically represents (a
-Python dict, a trained model, a dataset, a Pydantic model instance) the runtime always
+Python dict, a trained model, a dataset) the runtime always
 materializes it as a file on disk. This is a fundamental invariant: the `path` field is
 not optional metadata, it is the canonical identity of the artifact. Existence means the
 file exists; integrity means the file hash matches.
@@ -25,7 +25,6 @@ Examples of what artifacts can represent (and how they materialize):
 - Local files and folders (stored as-is)
 - Python dicts, lists, and other JSON-compatible objects (serialized to a `.json` file)
 - Arbitrary Python objects (serialized to a `.pkl` file via pickle)
-- Pydantic model instances (serialized to a `.json` file with schema validation)
 - Datasets and model checkpoints (stored as files or directories)
 - Remote objects such as S3 or HTTP resources (downloaded and cached locally before use)
 
@@ -125,48 +124,6 @@ data = artifact.read()  # list
 > **Warning:** pickle is not secure against malformed or maliciously crafted data.
 > Never unpickle data from untrusted sources.
 
-### `PydanticArtifact[T]`
-
-Serializes a `pydantic.BaseModel` subclass to a JSON file using `model_dump_json()`,
-and deserializes it back with full schema validation via `model_validate_json()`.
-`T` must be a `BaseModel` subclass.
-
-```python
-from pydantic import BaseModel
-from horus_builtin.artifact.pydantic import PydanticArtifact
-
-class MyModel(BaseModel):
-    name: str
-    value: int
-
-artifact = PydanticArtifact[MyModel](path="/tmp/result.json")
-artifact.write(MyModel(name="foo", value=42))
-obj = artifact.read()  # MyModel instance, fully validated
-```
-
-#### Registerable subclass pattern
-
-`PydanticArtifact[MyModel]` used directly as a type annotation is **not registered**
-in the artifact registry (parameterized generics are skipped). To make a
-`PydanticArtifact` dispatchable from a YAML workflow or JSON round-trip, define a
-concrete subclass with a fixed `kind`:
-
-```python
-class MyModelArtifact(PydanticArtifact[MyModel]):
-    kind: str = "my_model"
-```
-
-This registers `"my_model"` in the artifact registry and allows the runtime to
-reconstruct the correct artifact type from a serialized workflow:
-
-```yaml
-outputs:
-  result:
-    kind: my_model
-    path: /tmp/result.json
-```
-
-The same pattern applies to `JSONArtifact` and `PickleArtifact`.
 
 ## Registering custom artifacts
 
