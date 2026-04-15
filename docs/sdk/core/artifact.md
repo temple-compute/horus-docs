@@ -5,17 +5,18 @@ title: Artifact
 
 # Artifact System
 
-The Artifact System is part the **core execution mechanism** of the Horus Runtime SDK.
+The Artifact System is part of the **core execution mechanism** of the Horus Runtime SDK.
 
 ## What Is an Artifact?
 
 An _artifact_ represents a concrete unit of data produced or consumed by a task.
 
-**Every artifact is a file.** Regardless of what the artifact logically represents (a
-Python dict, a trained model, a dataset) the runtime always
-materializes it as a file on disk. This is a fundamental invariant: the `path` field is
-not optional metadata, it is the canonical identity of the artifact. Existence means the
-file exists; integrity means the file hash matches.
+**Every artifact is backed by a filesystem path.** Regardless of what the artifact
+logically represents (a Python dict, a trained model, a dataset) the runtime always
+materializes it on disk as either a file or a directory. This is a fundamental
+invariant: the `path` field is not optional metadata, it is the canonical identity of
+the artifact. Existence means the path exists; integrity means the content hash
+matches.
 
 This constraint makes artifacts deterministic, cacheable, and transportable across
 machines without any special serialization protocol at the workflow level.
