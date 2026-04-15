@@ -25,9 +25,9 @@ def _reset(self) -> None:
 
 ### Contract
 
-- `_run()` — task-specific execution logic; do not mutate `status` here
-- `is_complete()` — return `True` when all output artifacts are present and valid; used to skip already-complete tasks when `skip_if_complete=True`
-- `_reset()` — clear any subclass-specific state so the task can re-run; do not mutate `status` here
+- `_run()`: task-specific execution logic; do not mutate `status` here
+- `is_complete()`: return `True` when all output artifacts are present and valid; used to skip already-complete tasks when `skip_if_complete=True`
+- `_reset()`: clear any subclass-specific state so the task can re-run; do not mutate `status` here
 - `kind: str` is the registry discriminator
 - `executor` and `runtime` must be compatible
 - `target` decides where the task is dispatched
