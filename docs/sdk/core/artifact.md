@@ -5,35 +5,38 @@ title: Artifact
 
 # Artifact System
 
-The Artifact System is the **core execution mechanism** of the Horus Runtime SDK.
-
-An _artifact_ represents a concrete unit of data produced or consumed by a task
-(e.g. files, folders, datasets, models, serialized objects). Artifacts are not
-just data containers — they define **task success, workflow state, and execution
-status**.
-
-In Horus, **artifacts are the single source of truth**. The workflow engine does
-not track execution state explicitly. Instead, it derives execution state purely
-from artifact existence and integrity.
+The Artifact System is part of the **core execution mechanism** of the Horus Runtime SDK.
 
 ## What Is an Artifact?
 
-An artifact is a concrete representation of task input or output. Examples:
+An _artifact_ represents a concrete unit of data produced or consumed by a task.
 
-- Local files
-- Folders
-- Datasets
-- Model checkpoints
-- JSON / pickle / serialized objects
-- Remote objects (e.g. S3, HTTP, registries)
+**Every artifact is backed by a filesystem path.** Regardless of what the artifact
+logically represents (a Python dict, a trained model, a dataset) the runtime always
+materializes it on disk as either a file or a directory. This is a fundamental
+invariant: the `path` field is not optional metadata, it is the canonical identity of
+the artifact. Existence means the path exists; integrity means the content hash
+matches.
+
+This constraint makes artifacts deterministic, cacheable, and transportable across
+machines without any special serialization protocol at the workflow level.
+
+Examples of what artifacts can represent (and how they materialize):
+
+- Local files and folders (stored as-is)
+- Python dicts, lists, and other JSON-compatible objects (serialized to a `.json` file)
+- Arbitrary Python objects (serialized to a `.pkl` file via pickle)
+- Datasets and model checkpoints (stored as files or directories)
+- Remote objects such as S3 or HTTP resources (downloaded and cached locally before use)
 
 Each artifact:
 
 - Has a **unique ID**
-- Has a **URI** describing its location
+- Has a **path** identifying its location on disk
 - Defines:
   - How to **check existence**
-  - How to **materialize** itself locally
+  - How to **read** its contents back into a Python object
+  - How to **write** a Python object to its file representation
   - How to **compute a content hash** (determines if the artifact changed)
 
 ## Defining Custom Artifacts
@@ -44,45 +47,84 @@ runtime registry mechanism.
 ```python
 from horus_runtime.core.artifact.base import BaseArtifact
 
-class MyArtifact(BaseArtifact):
+class MyArtifact(BaseArtifact[str]):
+    kind = "my_artifact"
 
-    # Utility subclasses can set False to
-    # not include them in the registry
-    add_to_registry = True
+    def read(self) -> str:
+        with open(self.path) as f:
+            return f.read()
 
-    ...
+    def write(self, value: str) -> None:
+        with open(self.path, "w") as f:
+            f.write(value)
 ```
 
-### Required Implementations
+### BaseArtifact API and Required Implementations
 
-Every artifact must define:
+`BaseArtifact[T]` is a generic, file-backed artifact abstraction:
 
-- `exists()` → Does the artifact exist?
-- `materialize()` → Ensure the artifact is locally available.
-- `hash` → Deterministic content hash.
-- `delete()` → Deletes the artifact.
-- `kind: str` → Concrete discriminator value for the artifact type
-
-## Artifact Resolution
-
-Artifacts are resolved automatically at **workflow instantiation time** using:
-
-- Pydantic validation
-- The runtime artifact registry
-- Type discrimination via the `kind` field
-
-This allows workflows to declare artifacts declaratively without manually wiring
-runtime resolution logic.
+- **Generic type**: `BaseArtifact[T]` specifies the native Python type that `read()` returns and `write()` accepts.
+- **Path normalization**: Accepts both `str` and `Path` for `path`, always resolved to an absolute `Path`.
+- **ID logic**: Each artifact has a unique `internal_id` (UUID) and a user-friendly `id` (auto-set if not provided).
+- **Event emission**: Emits lifecycle events via the runtime event bus.
+- **Hashing**: Provides a `hash` property (SHA-256 of file contents) and a static `hash_file(path)` method.
+- **Required implementations**:
+  - `read() -> T`: Read and deserialize the artifact contents.
+  - `write(value: T) -> None`: Write the native representation to disk.
+  - `kind: str`: Concrete discriminator value used for registry dispatch and type resolution.
+- **Provided implementations**:
+  - `exists() -> bool`: Returns whether the path exists on disk.
+  - `delete()`: Removes the file and emits a delete event.
+  - `package() / unpackage()`: Artifact transport helpers.
 
 ## Built-in Artifacts
 
-The SDK provides standard artifact implementations:
+The SDK provides the following artifact implementations:
 
-- `FileArtifact` — Local file resources
-- `FolderArtifact` — Local directory resources
+### `FileArtifact`
 
-These cover the majority of filesystem-based workflows and serve as reference
-implementations for custom artifacts.
+Reads and writes raw bytes. Suitable for any opaque file.
+
+```python
+from horus_builtin.artifact.file import FileArtifact
+```
+
+### `FolderArtifact`
+
+Represents a local directory. Existence is checked via `path.is_dir()`.
+
+```python
+from horus_builtin.artifact.folder import FolderArtifact
+```
+
+### `JSONArtifact[T]`
+
+Serializes any JSON-compatible Python object (`dict`, `list`, `str`, etc.) to a `.json` file.
+The generic parameter `T` is used for type-checking only; no runtime validation is performed.
+
+```python
+from horus_builtin.artifact.json import JSONArtifact
+
+artifact = JSONArtifact[dict](path="/tmp/result.json")
+artifact.write({"key": "value"})
+data = artifact.read()  # dict, cast to T
+```
+
+### `PickleArtifact[T]`
+
+Serializes arbitrary Python objects using the `pickle` protocol.
+
+```python
+from horus_builtin.artifact.pickle import PickleArtifact
+
+artifact = PickleArtifact[list](path="/tmp/data.pkl")
+artifact.write([1, 2, 3])
+data = artifact.read()  # list
+```
+
+> **Warning:** pickle is not secure against malformed or maliciously crafted data.
+> Never unpickle data from untrusted sources.
+
 
 ## Registering custom artifacts
 
