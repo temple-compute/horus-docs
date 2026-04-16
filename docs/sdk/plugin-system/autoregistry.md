@@ -13,7 +13,7 @@ through Python entry points.
 ## Features
 
 - Automatic discovery of `Artifact`, `Task`, `Runtime`, `Executor`, `Target`,
-  `Workflow`, `Interaction`, `InteractionTransport`, and
+  `Workflow`, `Transfer`, `Interaction`, `InteractionTransport`, and
   `InteractionRenderer` types
 - Pydantic-backed discriminator lookup using `kind`
 - Composite discriminator keys via [`AutoRegistryProduct`](./auto_registry_product.md) for
@@ -70,6 +70,7 @@ Plugins are exposed through Python entry points in `pyproject.toml`.
 | `horus.runtime`   | Runtime plugins  | `command`        | `horus_builtin.runtime.command`       |
 | `horus.executor`  | Executor plugins | `shell`          | `horus_builtin.executor.shell`        |
 | `horus.target`    | Target plugins   | `local`          | `horus_builtin.target.local`          |
+| `horus.transfer`  | Transfer strategy plugins | `local_noop` | `horus_builtin.transfer.local_noop` |
 | `horus.workflow`  | Workflow plugins | `horus_workflow` | `horus_builtin.workflow.horus_workflow` |
 | `horus.interaction` | Interaction plugins | `common`      | `horus_builtin.interaction.common`    |
 | `horus.interaction_transport` | Interaction transport plugins | `cli` | `horus_builtin.interaction.cli` |
@@ -97,6 +98,9 @@ horus_task = "horus_builtin.task.horus_task"
 
 [project.entry-points."horus.target"]
 local = "horus_builtin.target.local"
+
+[project.entry-points."horus.transfer"]
+local_noop = "horus_builtin.transfer.local_noop"
 
 [project.entry-points."horus.workflow"]
 horus_workflow = "horus_builtin.workflow.horus_workflow"

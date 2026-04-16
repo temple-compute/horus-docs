@@ -39,31 +39,37 @@ All targets inherit from `BaseTarget`:
 class BaseTarget(AutoRegistry, entry_point="target"):
     registry_key: ClassVar[str] = "kind"
     kind: str
+    working_directory: Path = Path(getcwd())
 
     @property
     @abstractmethod
     def location_id(self) -> str:
-        pass
+        ...
+
+    @final
+    async def dispatch(self, task: BaseTask) -> None:
+        # sets task.status = PENDING, then calls _dispatch()
+        ...
 
     @abstractmethod
-    async def dispatch(self, task: BaseTask) -> None:
-        pass
+    async def _dispatch(self, task: BaseTask) -> None:
+        ...
 
     @abstractmethod
     async def wait(self) -> None:
-        pass
+        ...
 
     @abstractmethod
     async def cancel(self) -> None:
-        pass
+        ...
 
     @abstractmethod
     async def get_status(self) -> TaskStatus:
-        pass
+        ...
 
     @abstractmethod
     def access_cost(self, artifact: BaseArtifact) -> float | None:
-        pass
+        ...
 
     async def recover(self) -> bool:
         return False
@@ -71,17 +77,22 @@ class BaseTarget(AutoRegistry, entry_point="target"):
 
 ### Contract
 
-- `location_id` identifies the physical or logical location of execution
-- `dispatch()` starts the task on that location
-- `wait()` waits for completion
-- `cancel()` attempts cancellation
-- `get_status()` reports current task status
-- `access_cost()` estimates whether the target can read an artifact directly
-- `recover()` optionally reconnects to work after orchestrator restart
+- `location_id`: stable URI-like identifier for the physical location (e.g. `local://hostname`). Two targets that share a filesystem should return the same value; the transfer layer uses this to skip unnecessary copies.
+- `working_directory`: base directory on the target host where per-task working directories are created. Defaults to the current working directory.
+- `dispatch()`: public entry point, `@final`. Sets `task.status = PENDING` and delegates to `_dispatch()`. Do not override this.
+- `_dispatch()`: the implementation hook. Start the task on the target here.
+- `wait()`: block until the dispatched task completes.
+- `cancel()`: attempt cancellation of a running task.
+- `get_status()`: return the current `TaskStatus` of the dispatched task.
+- `access_cost()`: estimate the cost of reading an artifact from this target:
+  - `0.0`: zero-cost local read (same filesystem or in-memory)
+  - `> 0.0`: accessible but non-free (network, agent API, …)
+  - `None`: not accessible; a transfer is required before dispatch
+- `recover()`: optionally reconnect to a previously dispatched task after orchestrator restart. Returns `False` by default.
 
-`location_id` is especially important for artifact movement. Two targets with
-the same location can often share a filesystem, which means Horus may avoid
-copying artifacts between them.
+`location_id` feeds directly into the transfer system. Two targets with the same
+`location_id` share a filesystem, so the workflow can skip artifact copies between
+them.
 
 ## Built-in Target
 

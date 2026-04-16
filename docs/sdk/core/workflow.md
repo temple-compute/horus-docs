@@ -44,20 +44,21 @@ class BaseWorkflow(AutoRegistry, entry_point="workflow"):
     kind: str
     name: str
     tasks: dict[str, BaseTask] = Field(default_factory=dict)
+    orchestrator_target: BaseTarget | None = None
     status: WorkflowStatus = WorkflowStatus.IDLE
 
     @classmethod
     @abstractmethod
     def from_yaml(cls, path: str | Path) -> Self:
-        """
-        Load and construct a workflow from a YAML file.
-        """
+        """Load and construct a workflow from a YAML file."""
+
+    async def transfer_artifacts(self, task: BaseTask) -> None:
+        """Transfer input artifacts of task to its target before dispatch."""
+        ...
 
     @final
     async def run(self) -> None:
-        """
-        Drives status transitions: RUNNING → COMPLETED | CANCELED | FAILED.
-        """
+        """Drives status transitions: RUNNING → COMPLETED | CANCELED | FAILED."""
         ...
 
     @abstractmethod
@@ -66,27 +67,49 @@ class BaseWorkflow(AutoRegistry, entry_point="workflow"):
 
     @final
     def reset(self) -> None:
-        """
-        Reset status to IDLE and delegate to _reset().
-        """
+        """Reset status to IDLE and delegate to _reset()."""
         ...
 
     @abstractmethod
     def _reset(self) -> None:
-        """
-        Subclass-specific reset logic. Do not set self.status here.
-        """
+        """Subclass-specific reset logic. Do not set self.status here."""
 ```
 
 Subclasses must implement `from_yaml()`, `_run()`, and `_reset()`.
+
+### `orchestrator_target`
+
+`orchestrator_target` identifies the machine running the workflow itself. It is
+used as the transfer source for **root input artifacts**: those not produced by
+any upstream task in the workflow (i.e. data you provide before the workflow
+starts). Must be set when the workflow dispatches tasks to remote targets that
+cannot directly read local files.
+
+Leaving it as `None` is valid for purely local workflows; the transfer layer
+raises `OrchestratorTargetNotSetError` only when a remote task actually needs
+a root artifact and no source is configured.
+
+### `transfer_artifacts()`
+
+Called by `_run()` implementations before each `task.target.dispatch(task)`. It:
+
+1. Builds a reverse map from artifact ID → the target of the task that produced it.
+2. For each input of `task`, resolves the source target (producer target, or `orchestrator_target` for root inputs).
+3. Skips transfer if the destination target can already access the artifact (`access_cost()` returns non-`None`).
+4. Looks up the registered `BaseTransferStrategy` for the `(source, destination)` pair.
+5. Calls `strategy.transfer(artifact, source, task.target)`.
+
+See [Transfer Strategy](./transfer.md) for details on strategies and how to implement your own.
 
 ## Built-in Workflow
 
 - `HorusWorkflow`: runs tasks in definition order and skips tasks whose
   outputs already exist when `task.skip_if_complete` is `True`
 
-`HorusWorkflow` dispatches each task through `task.target`, then waits for that
-target to report completion before moving to the next task.
+`HorusWorkflow` sets `orchestrator_target = LocalTarget()` by default, which
+means root input artifacts are expected on the local filesystem. It calls
+`transfer_artifacts()` before each `task.target.dispatch(task)`, then waits
+for the target to report completion before moving to the next task.
 
 ## Example
 
