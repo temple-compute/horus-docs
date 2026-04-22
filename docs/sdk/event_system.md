@@ -179,7 +179,7 @@ task_failed  = "mypackage.events:TaskFailedEvent"
 In practice, you rarely need to register events via entry points. Because you emit events by importing and instantiating the class directly, the class is already available to whoever calls `emit()`. The `"horus.event"` entry point exists for cases where you want your event types to be **discoverable** by other parts of the runtime, for example, so a subscriber or tooling layer can enumerate all known event types without requiring a direct import of your package.
 :::
 
-For a complete reference on the plugin registration mechanism, see [AutoRegistry](./plugin-system/autoregistry.md).
+For a complete reference on the plugin registration mechanism, see [AutoRegistry](./plugin-system/auto-registry/autoregistry.md).
 
 ## Summary
 

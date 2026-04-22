@@ -1,4 +1,5 @@
 ---
+slug: /sdk/i18n
 sidebar_position: 7
 title: Internationalization (i18n)
 ---
@@ -39,7 +40,7 @@ horus-runtime's own internal translator is created the same way:
 tr = make_translator("horus_runtime", Path(__file__).parent / "locale")
 ```
 
-External plugins must **not** import horus-runtime's `tr` directly for their own strings. Each plugin should call `make_translator` with its own domain and locale directory so translations stay isolated. See [Plugin Internationalization](./plugin-system/i18n.md) for the full setup.
+External plugins must **not** import horus-runtime's `tr` directly for their own strings. Each plugin should call `make_translator` with its own domain and locale directory so translations stay isolated. See [Plugin Internationalization](./plugin-i18n.md) for the full setup.
 
 ## Using Translations in Your Code
 
@@ -360,7 +361,7 @@ src/horus_runtime/
         horus_runtime.mo       # Compiled binary
 ```
 
-Plugins follow the same layout under their own source tree, using their package name as the domain. See [Plugin Internationalization](./plugin-system/i18n.md).
+Plugins follow the same layout under their own source tree, using their package name as the domain. See [Plugin Internationalization](./plugin-i18n.md).
 
 ### Test with Long Translations
 

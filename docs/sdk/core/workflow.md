@@ -32,6 +32,7 @@ def _reset(self) -> None:
 - `from_yaml()`: load and construct a workflow from a YAML file
 - `_run()`: workflow-specific execution logic; do not mutate `status` here
 - `_reset()`: subclass-specific reset logic; do not mutate `status` here
+- `run()` is the public `final` entry point and runs `WorkflowMiddleware`
 - `kind: str` is the registry discriminator
 
 ## Base Workflow
@@ -77,39 +78,38 @@ class BaseWorkflow(AutoRegistry, entry_point="workflow"):
 
 Subclasses must implement `from_yaml()`, `_run()`, and `_reset()`.
 
+`run()` wraps `_run()` in `WorkflowMiddleware.call_with_middleware(...)` and
+owns the workflow status transitions.
+
 ### `orchestrator_target`
 
 `orchestrator_target` identifies the machine running the workflow itself. It is
-used as the transfer source for **root input artifacts**: those not produced by
-any upstream task in the workflow (i.e. data you provide before the workflow
-starts). Must be set when the workflow dispatches tasks to remote targets that
-cannot directly read local files.
+used as the transfer source for root input artifacts: those not produced by
+any upstream task in the workflow.
 
-Leaving it as `None` is valid for purely local workflows; the transfer layer
-raises `OrchestratorTargetNotSetError` only when a remote task actually needs
-a root artifact and no source is configured.
+Leaving it as `None` is valid for purely local workflows. The transfer layer
+raises `OrchestratorTargetNotSetError` only when a task actually needs a root
+artifact from a source that has not been configured.
 
 ### `transfer_artifacts()`
 
 Called by `_run()` implementations before each `task.target.dispatch(task)`. It:
 
-1. Builds a reverse map from artifact ID → the target of the task that produced it.
-2. For each input of `task`, resolves the source target (producer target, or `orchestrator_target` for root inputs).
-3. Skips transfer if the destination target can already access the artifact (`access_cost()` returns non-`None`).
-4. Looks up the registered `BaseTransferStrategy` for the `(source, destination)` pair.
-5. Calls `strategy.transfer(artifact, source, task.target)`.
+1. builds a reverse map from artifact ID to the target of the task that produced it
+2. resolves the source target for each input artifact
+3. looks up the registered `BaseTransferStrategy` for the `(source, destination)` pair
+4. calls `strategy.transfer(artifact, source, task.target)`
 
-See [Transfer Strategy](./transfer.md) for details on strategies and how to implement your own.
+See [Transfer Strategy](./transfer.md) for details.
 
 ## Built-in Workflow
 
 - `HorusWorkflow`: runs tasks in definition order and skips tasks whose
   outputs already exist when `task.skip_if_complete` is `True`
 
-`HorusWorkflow` sets `orchestrator_target = LocalTarget()` by default, which
-means root input artifacts are expected on the local filesystem. It calls
-`transfer_artifacts()` before each `task.target.dispatch(task)`, then waits
-for the target to report completion before moving to the next task.
+`HorusWorkflow` sets `orchestrator_target = LocalTarget()` by default. It calls
+`transfer_artifacts()` before each `task.target.dispatch(task)`, then waits for
+the target to report completion before moving to the next task.
 
 ## Example
 
@@ -125,8 +125,9 @@ asyncio.run(wf.run())
 
 ## Task IDs
 
-Each task receives its `task_id` from the key used in the workflow's `tasks`
-mapping. This keeps task IDs aligned with workflow registration keys.
+After workflow initialization, each task receives its `id` from the key used in
+the workflow's `tasks` mapping. This keeps task IDs aligned with workflow
+registration keys.
 
 ## Registering Custom Workflows
 
@@ -136,4 +137,4 @@ To register workflow plugins, expose them through:
 [project.entry-points."horus.workflow"]
 ```
 
-For more details, refer to the [Auto-Registry documentation](../plugin-system/autoregistry.md).
+For more details, refer to the [Auto-Registry documentation](../plugin-system/auto-registry/autoregistry.md).

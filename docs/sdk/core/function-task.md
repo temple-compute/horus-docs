@@ -15,8 +15,7 @@ runtime and executor, and registers it into a workflow with a decorator.
 - Automatic task registration in a workflow
 - In-process execution without spawning a shell
 - Support for both sync and async Python callables
-- Named argument injection from task context (`task`, `inputs`, `outputs`,
-  `variables`)
+- Named argument injection from task context (`task`, `inputs`, `outputs`)
 - A default CLI interaction transport for interactive tasks
 - The usual `HorusTask` behavior for input validation, output-based skip logic,
   events, and reset support
@@ -26,10 +25,10 @@ runtime and executor, and registers it into a workflow with a decorator.
 ```python
 @FunctionTask.task(
     wf,
-    name=None,
-    inputs=None,
-    outputs=None,
-    variables=None,
+    name,
+    inputs,
+    outputs,
+    target,
 )
 def my_step() -> None:
     ...
@@ -40,8 +39,8 @@ The decorator:
 1. creates a `FunctionTask`
 2. wraps the function in `PythonFunctionRuntime`
 3. uses `PythonFunctionExecutor` by default
-4. syncs `task_id` with the final task name
-5. inserts the task into `wf.tasks` using `task_id` as the key
+4. syncs the compatibility `task_id` field with the task name
+5. inserts the task into `wf.tasks` using the final task name as the key
 
 ## Basic Example
 
@@ -70,7 +69,6 @@ asyncio.run(wf.run())
 - `task`: the full `FunctionTask` instance
 - any key from `inputs`
 - any key from `outputs`
-- any key from `variables`
 
 Horus matches parameters by name and calls your function with keyword args.
 
@@ -85,22 +83,21 @@ wf = HorusWorkflow(name="my_workflow")
     wf,
     inputs={"input_file": FileArtifact(path="data.txt")},
     outputs={"output_file": FileArtifact(path="result.txt")},
-    variables={"uppercase": True},
 )
 def process(
     input_file: FileArtifact,
     output_file: FileArtifact,
-    uppercase: bool,
     task: FunctionTask,
 ) -> None:
     content = input_file.path.read_text()
-    output_file.path.write_text(content.upper() if uppercase else content)
-    print(task.task_id)
+    output_file.path.write_text(content.upper())
+    print(task.id)
 ```
 
 If your function declares a parameter name that is not available from that
 context, Horus raises a `ValueError` during runtime setup. If you declare
-`**kwargs`, Horus passes all available values.
+`**kwargs`, Horus passes all available values from `task`, `inputs`, and
+`outputs`.
 
 ### Async callables are supported
 
@@ -192,5 +189,4 @@ Use `FunctionTask` when:
 Use `HorusTask` with `ShellExecutor` and `CommandRuntime` when:
 
 - the task is naturally a shell command
-- you want string formatting against inputs, outputs, and variables
 - the workflow is primarily YAML or command oriented

@@ -13,10 +13,10 @@ code string, or any other executor-specific payload.
 
 ## Core Concept
 
-Every runtime implements:
+Every runtime implements an internal setup hook:
 
 ```python
-def setup_runtime(self, task: BaseTask) -> T:
+async def _setup_runtime(self, task: BaseTask) -> T:
     """
     Prepare the runtime payload that an executor will consume.
     """
@@ -26,6 +26,8 @@ def setup_runtime(self, task: BaseTask) -> T:
 
 - Return a payload of type `T` that the paired executor understands
 - Use task context when needed to format or prepare the payload
+- Implement `_setup_runtime()`, not `setup_runtime()`
+- `setup_runtime()` is the public `final` entry point and runs `RuntimeMiddleware`
 - Use `kind: str` as the registry discriminator
 
 ## Base Runtime
@@ -38,12 +40,21 @@ class BaseRuntime[T: Any = Any](AutoRegistry, entry_point="runtime"):
     kind: str
 
     @abstractmethod
-    def setup_runtime(self, task: BaseTask) -> T:
-        pass
+    async def _setup_runtime(self, task: BaseTask) -> T:
+        """Subclass hook that prepares the runtime payload."""
+
+    @final
+    async def setup_runtime(self, task: BaseTask) -> T:
+        """Public entry point wrapped by runtime middleware."""
+        ...
 ```
 
 The generic return type is intentionally flexible. This allows Horus runtimes
 to return more than strings, such as Python callables for in-process execution.
+
+When `setup_runtime()` is called, Horus wraps the call in
+`RuntimeMiddleware.call_with_middleware(...)` before delegating to
+`_setup_runtime()`. See [Middleware Overview](../plugin-system/middleware/overview.md).
 
 ## Built-in Runtimes
 
@@ -68,7 +79,7 @@ runtime = CommandRuntime(
 - `task`
 - declared input artifacts
 - declared output artifacts
-- `task.variables`
+- task fields available to the runtime implementation
 
 ## Python-Native Runtime Examples
 
@@ -88,10 +99,9 @@ runtime2 = PythonCodeStringRuntime(
 - `task`
 - declared input artifacts (`inputs`)
 - declared output artifacts (`outputs`)
-- `task.variables`
 
 When the callable does not declare `**kwargs`, `PythonFunctionRuntime`
-validates during `setup_runtime()` that every declared function parameter can
+validates during `_setup_runtime()` that every declared function parameter can
 be satisfied from that context and raises a `ValueError` for missing names.
 
 ## Registering Custom Runtimes
@@ -102,4 +112,4 @@ To register runtime plugins, expose them through:
 [project.entry-points."horus.runtime"]
 ```
 
-For more details, refer to the [Auto-Registry documentation](../plugin-system/autoregistry.md).
+For more details, refer to the [Auto-Registry documentation](../plugin-system/auto-registry/autoregistry.md).

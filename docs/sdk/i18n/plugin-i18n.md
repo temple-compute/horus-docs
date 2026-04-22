@@ -1,7 +1,7 @@
 ---
 id: plugin-i18n
-slug: /sdk/plugin-system/i18n
-sidebar_position: 3
+slug: /sdk/i18n/plugin-i18n
+sidebar_position: 2
 title: Plugin Internationalization
 ---
 
