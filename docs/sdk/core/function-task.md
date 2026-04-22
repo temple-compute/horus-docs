@@ -25,11 +25,10 @@ runtime and executor, and registers it into a workflow with a decorator.
 ```python
 @FunctionTask.task(
     wf,
-    id=None,
-    name=None,
-    inputs=None,
-    outputs=None,
-    target=None,
+    name,
+    inputs,
+    outputs,
+    target,
 )
 def my_step() -> None:
     ...

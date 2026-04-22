@@ -56,13 +56,10 @@ Entered by `BaseExecutor.execute()`.
 @dataclass
 class TargetMiddlewareContext:
     target: BaseTarget
-    task: BaseTask | None = None
+    task: BaseTask
 ```
 
 Entered by `BaseTarget.dispatch()`.
-
-Today, middleware wraps dispatch only. The optional `task` field leaves room
-for reuse by other target operations in the future.
 
 ## Transfer Middleware
 
