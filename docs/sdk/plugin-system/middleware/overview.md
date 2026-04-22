@@ -1,0 +1,128 @@
+---
+sidebar_position: 1
+title: Middleware Overview
+---
+
+# Middleware Overview
+
+Horus exposes a first-class middleware system around the main runtime extension
+points. Middleware lets you add cross-cutting behavior such as timing, logging,
+retries, exception translation, dynamic context mutation, or metrics without
+replacing the core implementations.
+
+## Where Middleware Runs
+
+Horus provides middleware roots for:
+
+- `TaskMiddleware`
+- `WorkflowMiddleware`
+- `RuntimeMiddleware`
+- `ExecutorMiddleware`
+- `TargetMiddleware`
+- `TransferMiddleware`
+- `InteractionMiddleware`
+
+Each root owns a registry of middleware classes for that domain and exposes a
+shared execution helper:
+
+```python
+await SomeMiddleware.call_with_middleware(context, call_next)
+```
+
+The chain is entered by the public `final` methods on the core objects:
+
+- `BaseTask.run()`
+- `BaseWorkflow.run()`
+- `BaseRuntime.setup_runtime()`
+- `BaseExecutor.execute()`
+- `BaseTarget.dispatch()`
+- `BaseTransferStrategy.transfer()`
+- `BaseInteractionTransport.ask()` for each render attempt
+
+Custom implementations should override the internal hooks such as `_run()`,
+`_setup_runtime()`, `_execute()`, `_dispatch()`, or `_transfer()`, while the
+public wrapper methods preserve shared behavior and middleware execution.
+
+## Base API
+
+All middleware roots inherit from `AutoMiddleware[T]`:
+
+```python
+class AutoMiddleware[T = Any](ABC):
+    async def before(self, context: T) -> None:
+        ...
+
+    async def after(self, context: T) -> None:
+        ...
+
+    async def wrap(
+        self,
+        context: T,
+        call_next: Callable[[], Awaitable[R]],
+    ) -> R:
+        ...
+
+    @classmethod
+    async def call_with_middleware(
+        cls,
+        context: T,
+        call_next: Callable[[], Awaitable[R]],
+    ) -> R:
+        ...
+```
+
+The default `wrap()` implementation is:
+
+1. `await before(context)`
+2. `await call_next()`
+3. `await after(context)` in a `finally` block
+
+This means `after()` still runs when the wrapped call raises.
+
+## Execution Order
+
+Middleware is instantiated per call context and runs in registration order.
+
+If middleware `A` is registered before middleware `B`, the call stack is:
+
+1. `A.before()`
+2. `B.before()`
+3. wrapped operation
+4. `B.after()`
+5. `A.after()`
+
+Earlier registrations become the outer wrappers.
+
+## Registration
+
+Middleware uses `AutoMiddleware`, which loads entry points with the prefix:
+
+```text
+horus.middleware.<domain>
+```
+
+Examples:
+
+- `horus.middleware.task`
+- `horus.middleware.workflow`
+- `horus.middleware.runtime`
+
+`HorusContext.boot()` calls `AutoMiddleware.init_registry()` during startup, so
+middleware entry points are loaded automatically with the rest of the runtime.
+
+## Simple Example
+
+```python
+from horus_runtime.middleware.task import TaskMiddleware, TaskMiddlewareContext
+
+
+class LogTaskMiddleware(TaskMiddleware):
+    async def before(self, context: TaskMiddlewareContext) -> None:
+        print(f"starting {context.task.id}")
+
+    async def after(self, context: TaskMiddlewareContext) -> None:
+        print(f"finished {context.task.id} with {context.task.status}")
+```
+
+For domain-specific context fields, see [Middleware Domains](./domains.md). For
+authoring patterns, see [Writing Middleware](./writing-middleware.md).

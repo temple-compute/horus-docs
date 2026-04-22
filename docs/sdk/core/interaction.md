@@ -52,9 +52,14 @@ When `ask()` runs, Horus:
 
 1. looks up the renderer for the transport and interaction pair
 2. emits interaction lifecycle events
-3. renders the prompt
-4. parses the raw answer
-5. retries on parse errors until `max_retries` is exhausted
+3. builds an `InteractionMiddlewareContext`
+4. runs `InteractionMiddleware` for the current attempt
+5. renders the prompt using the possibly mutated transport, interaction, and renderer
+6. parses the raw answer
+7. retries on parse errors until `max_retries` is exhausted
+
+Middleware runs once per attempt, which means it can adjust retry behavior,
+swap the transport, or replace the renderer between attempts.
 
 Renderers are registered per transport/interaction pair through a derived key:
 
@@ -65,11 +70,9 @@ Renderers are registered per transport/interaction pair through a derived key:
 For example, the built-in CLI string renderer is registered as `cli.text_prompt`.
 
 The key is derived automatically at class definition time by
-[`AutoRegistryProduct`](../plugin-system/auto_registry_product.md). Concrete
+[`AutoRegistryProduct`](../plugin-system/auto-registry/auto_registry_product.md). Concrete
 renderer subclasses only need to assign `handles_transport` and
-`handles_interaction`; the mixin composes the key from those types'
-`registry_key` defaults, which for transports and interactions typically match
-their `kind` values.
+`handles_interaction`.
 
 ## Built-in Interactions
 
@@ -136,6 +139,9 @@ The transport emits events during the interaction lifecycle:
 
 These events integrate with the normal Horus event bus.
 
+See [Middleware Domains](../plugin-system/middleware/domains.md) for the
+`InteractionMiddlewareContext` fields.
+
 ## Registering Custom Interaction Plugins
 
 Custom interaction components are registered through Python entry points:
@@ -149,7 +155,6 @@ cli = "horus_builtin.interaction.cli"
 
 [project.entry-points."horus.interaction_renderer"]
 cli = "horus_builtin.interaction.cli"
-
 ```
 
 Use:

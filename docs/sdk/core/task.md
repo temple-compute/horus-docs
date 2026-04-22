@@ -6,7 +6,7 @@ title: Task
 # Task System
 
 Tasks are the unit of work in Horus. A task binds together its input and output
-artifacts, execution variables, runtime, executor, and target.
+artifacts, runtime, executor, target, and optional interaction transport.
 
 ## Core Concept
 
@@ -28,6 +28,7 @@ def _reset(self) -> None:
 - `_run()`: task-specific execution logic; do not mutate `status` here
 - `is_complete()`: return `True` when all output artifacts are present and valid; used to skip already-complete tasks when `skip_if_complete=True`
 - `_reset()`: clear any subclass-specific state so the task can re-run; do not mutate `status` here
+- `run()` is the public `final` entry point and runs `TaskMiddleware`
 - `kind: str` is the registry discriminator
 - `executor` and `runtime` must be compatible
 - `target` decides where the task is dispatched
@@ -44,11 +45,10 @@ All tasks inherit from `BaseTask`:
 class BaseTask(AutoRegistry, entry_point="task"):
     registry_key: ClassVar[str] = "kind"
     kind: str
-    task_id: str | None = None
+    id: str
     name: str
     inputs: dict[str, BaseArtifact] = Field(default_factory=dict)
     outputs: dict[str, BaseArtifact] = Field(default_factory=dict)
-    variables: dict[str, Any] = Field(default_factory=dict)
     executor: BaseExecutor
     runtime: BaseRuntime
     target: BaseTarget
@@ -86,6 +86,9 @@ class BaseTask(AutoRegistry, entry_point="task"):
 
 Subclasses must implement `_run()`, `is_complete()`, and `_reset()`.
 
+`run()` wraps `_run()` in `TaskMiddleware.call_with_middleware(...)` and owns
+all status transitions.
+
 ## Built-in Tasks
 
 - `HorusTask`: the standard task implementation for command-style execution
@@ -96,12 +99,10 @@ Subclasses must implement `_run()`, `is_complete()`, and `_reset()`.
 
 `HorusTask` provides the default task behavior:
 
-- Emits task start and completion events
-- Validates that declared input artifacts exist before execution
-- Delegates placement to the configured target
-- Delegates execution to the configured executor once running on that target
-- Raises `TaskExecutionError` on non-zero return codes
-- Treats a task as complete when all declared output artifacts exist
+- emits task lifecycle events
+- validates that declared input artifacts exist before execution
+- delegates execution to the configured executor
+- treats a task as complete when all declared output artifacts exist
 
 The default `HorusTask.target` is `LocalTarget`, so tasks run in-process unless
 you provide a different target.
@@ -121,9 +122,9 @@ def prepare_data() -> None:
 
 The decorator creates a `FunctionTask`, wraps the function in a
 `PythonFunctionRuntime`, and registers the task in the workflow automatically.
-Function parameters are injected by name: `task` is available directly (positional argument), and
-other parameters are matched against keys (keyword arguments) in declared `inputs`, declared
-`outputs`, and `task.variables`.
+Function parameters are injected by name: `task` is available directly, and
+other parameters are matched against keys in declared `inputs` and declared
+`outputs`.
 
 It also defaults `interaction` to the built-in CLI transport, which makes
 interactive code-first tasks easy to author.
@@ -138,4 +139,4 @@ To register task plugins, expose them through:
 [project.entry-points."horus.task"]
 ```
 
-For more details, refer to the [Auto-Registry documentation](../plugin-system/autoregistry.md).
+For more details, refer to the [Auto-Registry documentation](../plugin-system/auto-registry/autoregistry.md).

@@ -25,9 +25,10 @@ At a high level:
 - [Interaction](./core/interaction.md)
 - [Workflow](./core/workflow.md)
 
-## Plugin System
+## Plugin system
 
-- [Auto-Registry](./plugin-system/autoregistry.md)
+- [Auto-Registry](./plugin-system/auto-registry/autoregistry.md)
+- [Middleware Overview](./plugin-system/middleware/overview.md)
 
 ## Features
 
@@ -36,4 +37,4 @@ At a high level:
 - Shell-based and Python-native task execution
 - Code-first workflows with `FunctionTask`
 - Typed runtime interaction support with pluggable transports and renderers
-- [Internationalization (i18n)](i18n.md)
+- [Internationalization (i18n)](./i18n/index.md)

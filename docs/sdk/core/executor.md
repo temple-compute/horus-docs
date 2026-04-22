@@ -11,10 +11,10 @@ executor is responsible for invoking that payload in a compatible way.
 
 ## Core Concept
 
-Every executor implements:
+Every executor implements an internal execution hook:
 
 ```python
-async def execute(self, task: BaseTask) -> int:
+async def _execute(self, task: BaseTask) -> None:
     ...
 ```
 
@@ -24,9 +24,9 @@ The target owns dispatch and waiting. The executor focuses on execution only.
 
 ### Contract
 
-- Return `0` on success
-- Return non-zero on task failure
 - Declare compatible runtime types via `runtimes`
+- Implement `_execute()`, not `execute()`
+- `execute()` is the public `final` entry point and runs `ExecutorMiddleware`
 - Use `kind: str` as the registry discriminator
 
 `BaseTask` validates runtime compatibility during model validation. If a task
@@ -43,14 +43,26 @@ class BaseExecutor(AutoRegistry, entry_point="executor"):
     kind: str
     runtimes: ClassVar[tuple[type[BaseRuntime], ...]] = (BaseRuntime,)
 
+    @final
+    async def execute(self, task: BaseTask) -> None:
+        """
+        Public entry point wrapped by executor middleware.
+        """
+        ...
+
     @abstractmethod
-    async def execute(self, task: BaseTask) -> int:
-        pass
+    async def _execute(self, task: BaseTask) -> None:
+        """
+        Subclass hook that performs execution.
+        """
 ```
+
+`execute()` wraps `_execute()` in `ExecutorMiddleware.call_with_middleware(...)`.
+See [Middleware Overview](../plugin-system/middleware/overview.md).
 
 ## Built-in Executors
 
-- `ShellExecutor`: executes a `CommandRuntime` with `subprocess.run(..., shell=True)`
+- `ShellExecutor`: executes a `CommandRuntime`
 - `PythonFunctionExecutor`: executes a `PythonFunctionRuntime` in-process by
   calling the wrapped Python function directly
 - `PythonExecExecutor`: executes a `PythonCodeStringRuntime` in-process using
@@ -101,4 +113,4 @@ To register executor plugins, expose them through:
 [project.entry-points."horus.executor"]
 ```
 
-For more details, refer to the [Auto-Registry documentation](../plugin-system/autoregistry.md).
+For more details, refer to the [Auto-Registry documentation](../plugin-system/auto-registry/autoregistry.md).
