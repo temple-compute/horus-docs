@@ -43,6 +43,8 @@ All workflows inherit from `BaseWorkflow`:
 class BaseWorkflow(AutoRegistry, entry_point="workflow"):
     registry_key: ClassVar[str] = "kind"
     kind: str
+    kind_name: ClassVar[str] = "Workflow"
+    kind_description: ClassVar[str] = _("Base workflow")
     name: str
     tasks: dict[str, BaseTask] = Field(default_factory=dict)
     orchestrator_target: BaseTarget | None = None
@@ -80,6 +82,12 @@ Subclasses must implement `from_yaml()`, `_run()`, and `_reset()`.
 
 `run()` wraps `_run()` in `WorkflowMiddleware.call_with_middleware(...)` and
 owns the workflow status transitions.
+
+### Kind metadata
+
+Workflows may declare `kind_name` and `kind_description` ClassVars to make
+registry entries more discoverable. Use the i18n helper from `horus_runtime`
+(`_(...)`) for translatable descriptions.
 
 ### `orchestrator_target`
 

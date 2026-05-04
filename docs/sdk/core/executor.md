@@ -41,6 +41,8 @@ All executors inherit from `BaseExecutor`:
 class BaseExecutor(AutoRegistry, entry_point="executor"):
     registry_key: ClassVar[str] = "kind"
     kind: str
+    kind_name: ClassVar[str] = "Executor"
+    kind_description: ClassVar[str] = _("Base executor")
     runtimes: ClassVar[tuple[type[BaseRuntime], ...]] = (BaseRuntime,)
 
     @final
@@ -59,6 +61,12 @@ class BaseExecutor(AutoRegistry, entry_point="executor"):
 
 `execute()` wraps `_execute()` in `ExecutorMiddleware.call_with_middleware(...)`.
 See [Middleware Overview](../plugin-system/middleware/overview.md).
+
+### Kind metadata
+
+Executors may expose `kind_name` and `kind_description` ClassVars to provide
+human-friendly text for registries and UIs. Prefer using `horus_runtime`'s
+i18n helper (`_(...)`) for `kind_description` so descriptions are translatable.
 
 ## Built-in Executors
 

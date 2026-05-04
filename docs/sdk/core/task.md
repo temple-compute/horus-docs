@@ -45,6 +45,8 @@ All tasks inherit from `BaseTask`:
 class BaseTask(AutoRegistry, entry_point="task"):
     registry_key: ClassVar[str] = "kind"
     kind: str
+    kind_name: ClassVar[str] = "Task"
+    kind_description: ClassVar[str] = _("Base task")
     id: str
     name: str
     inputs: dict[str, BaseArtifact] = Field(default_factory=dict)
@@ -85,6 +87,25 @@ class BaseTask(AutoRegistry, entry_point="task"):
 ```
 
 Subclasses must implement `_run()`, `is_complete()`, and `_reset()`.
+
+### Kind metadata
+
+Registry-backed classes (tasks, targets, runtimes, executors, workflows)
+now expose two optional ClassVar fields that provide human-friendly metadata
+for client UIs and registries:
+
+- `kind_name: ClassVar[str]` — a short, human-readable name for the kind.
+- `kind_description: ClassVar[str]` — a longer description string. Prefer
+    using the i18n helper from `horus_runtime` for translations, e.g.:
+
+```python
+from horus_runtime.i18n import _
+
+class HorusTask(HorusTaskBase):
+        kind: str = "horus_task"
+        kind_name: ClassVar[str] = "Horus Task"
+        kind_description: ClassVar[str] = _("Basic Horus task")
+```
 
 `run()` wraps `_run()` in `TaskMiddleware.call_with_middleware(...)` and owns
 all status transitions.
