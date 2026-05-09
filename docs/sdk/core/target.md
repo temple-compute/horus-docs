@@ -100,7 +100,7 @@ Targets may expose `kind_name` and `kind_description` ClassVars to provide
 human-friendly names and descriptions for registries and UIs. To make
 descriptions translatable, use your plugin's own translator created with
 `make_translator` (typically aliased as `_`) rather than importing
-`horus_runtime`'s internal translator. See [/sdk/i18n](/sdk/i18n) for the
+`horus_runtime`'s internal translator. See [SDK i18n guide](../i18n/index.md) for the
 recommended pattern.
 
 ## Built-in Target

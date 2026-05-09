@@ -100,9 +100,7 @@ for client UIs and registries:
     as `_`) for translations; see the [SDK i18n guide](../i18n/index.md), e.g.:
 
 ```python
-from horus.sdk.i18n import make_translator
-
-_ = make_translator("your_plugin_name")
+from your_plugin.i18n import tr as _
 
 class HorusTask(BaseTask):
         kind: str = "horus_task"
