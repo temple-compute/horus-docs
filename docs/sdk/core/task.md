@@ -104,7 +104,7 @@ from horus.sdk.i18n import make_translator
 
 _ = make_translator("your_plugin_name")
 
-class HorusTask(HorusTaskBase):
+class HorusTask(BaseTask):
         kind: str = "horus_task"
         kind_name: ClassVar[str] = "Horus Task"
         kind_description: ClassVar[str] = _("Basic Horus task")
