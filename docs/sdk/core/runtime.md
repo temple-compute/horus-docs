@@ -38,6 +38,8 @@ All runtimes inherit from `BaseRuntime[T]`:
 class BaseRuntime[T: Any = Any](AutoRegistry, entry_point="runtime"):
     registry_key: ClassVar[str] = "kind"
     kind: str
+    kind_name: ClassVar[str] = "Runtime"
+    kind_description: ClassVar[str] = _("Base runtime")
 
     @abstractmethod
     async def _setup_runtime(self, task: BaseTask) -> T:
@@ -55,6 +57,13 @@ to return more than strings, such as Python callables for in-process execution.
 When `setup_runtime()` is called, Horus wraps the call in
 `RuntimeMiddleware.call_with_middleware(...)` before delegating to
 `_setup_runtime()`. See [Middleware Overview](../plugin-system/middleware/overview.md).
+
+### Kind metadata
+
+Runtimes may provide `kind_name` and `kind_description` ClassVars to surface
+user-friendly names and translatable descriptions. For `kind_description`,
+use a plugin-scoped translator created with `make_translator` (typically
+aliased as `_`).
 
 ## Built-in Runtimes
 

@@ -38,6 +38,8 @@ All targets inherit from `BaseTarget`:
 class BaseTarget(AutoRegistry, entry_point="target"):
     registry_key: ClassVar[str] = "kind"
     kind: str
+    kind_name: ClassVar[str] = "Target"
+    kind_description: ClassVar[str] = _("Base target")
     working_directory: Path = Field(default_factory=Path.cwd)
 
     @property
@@ -91,6 +93,15 @@ between them.
 
 Only `dispatch()` is middleware-wrapped today. `wait()`, `cancel()`, and
 `get_status()` remain direct target methods.
+
+### Kind metadata
+
+Targets may expose `kind_name` and `kind_description` ClassVars to provide
+human-friendly names and descriptions for registries and UIs. To make
+descriptions translatable, use your plugin's own translator created with
+`make_translator` (typically aliased as `_`) rather than importing
+`horus_runtime`'s internal translator. See [/sdk/i18n](/sdk/i18n) for the
+recommended pattern.
 
 ## Built-in Target
 
