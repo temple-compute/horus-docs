@@ -61,8 +61,9 @@ When `setup_runtime()` is called, Horus wraps the call in
 ### Kind metadata
 
 Runtimes may provide `kind_name` and `kind_description` ClassVars to surface
-user-friendly names and translatable descriptions. Use the i18n helper from
-`horus_runtime` (`_(...)`) for `kind_description`.
+user-friendly names and translatable descriptions. For `kind_description`,
+use a plugin-scoped translator created with `make_translator` (typically
+aliased as `_`).
 
 ## Built-in Runtimes
 

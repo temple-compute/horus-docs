@@ -65,8 +65,10 @@ See [Middleware Overview](../plugin-system/middleware/overview.md).
 ### Kind metadata
 
 Executors may expose `kind_name` and `kind_description` ClassVars to provide
-human-friendly text for registries and UIs. Prefer using `horus_runtime`'s
-i18n helper (`_(...)`) for `kind_description` so descriptions are translatable.
+human-friendly text for registries and UIs. For `kind_description`, prefer
+using your plugin's own translator created via `make_translator` (commonly
+aliased to `_(...)`) so descriptions are translatable without depending on
+`horus_runtime`'s internal translator.
 
 ## Built-in Executors
 

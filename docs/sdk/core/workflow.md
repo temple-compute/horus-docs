@@ -86,8 +86,9 @@ owns the workflow status transitions.
 ### Kind metadata
 
 Workflows may declare `kind_name` and `kind_description` ClassVars to make
-registry entries more discoverable. Use the i18n helper from `horus_runtime`
-(`_(...)`) for translatable descriptions.
+registry entries more discoverable. Use your plugin's translator (created via
+`make_translator` and commonly aliased as `_(...)`) for translatable
+descriptions.
 
 ### `orchestrator_target`
 

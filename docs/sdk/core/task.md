@@ -96,10 +96,13 @@ for client UIs and registries:
 
 - `kind_name: ClassVar[str]` — a short, human-readable name for the kind.
 - `kind_description: ClassVar[str]` — a longer description string. Prefer
-    using the i18n helper from `horus_runtime` for translations, e.g.:
+    using a plugin-scoped translator created with `make_translator` (aliased
+    as `_`) for translations; see the [SDK i18n guide](../i18n/index.md), e.g.:
 
 ```python
-from horus_runtime.i18n import _
+from horus.sdk.i18n import make_translator
+
+_ = make_translator("your_plugin_name")
 
 class HorusTask(HorusTaskBase):
         kind: str = "horus_task"

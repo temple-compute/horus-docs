@@ -97,8 +97,11 @@ Only `dispatch()` is middleware-wrapped today. `wait()`, `cancel()`, and
 ### Kind metadata
 
 Targets may expose `kind_name` and `kind_description` ClassVars to provide
-human-friendly names and descriptions for registries and UIs. Use the
-`horus_runtime` i18n helper (`_(...)`) to make descriptions translatable.
+human-friendly names and descriptions for registries and UIs. To make
+descriptions translatable, use your plugin's own translator created with
+`make_translator` (typically aliased as `_`) rather than importing
+`horus_runtime`'s internal translator. See [/sdk/i18n](/sdk/i18n) for the
+recommended pattern.
 
 ## Built-in Target
 
