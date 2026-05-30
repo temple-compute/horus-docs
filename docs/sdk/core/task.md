@@ -49,8 +49,8 @@ class BaseTask(AutoRegistry, entry_point="task"):
     kind_description: ClassVar[str] = _("Base task")
     id: str
     name: str
-    inputs: dict[str, BaseArtifact] = Field(default_factory=dict)
-    outputs: dict[str, BaseArtifact] = Field(default_factory=dict)
+    inputs: list[BaseArtifact] = Field(default_factory=list)
+    outputs: list[BaseArtifact] = Field(default_factory=list)
     executor: BaseExecutor
     runtime: BaseRuntime
     target: BaseTarget
@@ -87,6 +87,17 @@ class BaseTask(AutoRegistry, entry_point="task"):
 ```
 
 Subclasses must implement `_run()`, `is_complete()`, and `_reset()`.
+
+### `inputs` and `outputs`
+
+Each artifact carries its own `id`, and that `id` is
+what links tasks together in the workflow DAG: a task whose input artifact `id`
+matches another task's output artifact `id` depends on that task. See
+[DAG planning](./workflow.md#dag-planning).
+
+Output artifact IDs must be unique across the whole workflow; runtimes that
+need a name→artifact mapping (for example to format a shell command or inject
+function parameters) build it on the fly keyed by `artifact.id`.
 
 ### Kind metadata
 
@@ -145,8 +156,8 @@ def prepare_data() -> None:
 The decorator creates a `FunctionTask`, wraps the function in a
 `PythonFunctionRuntime`, and registers the task in the workflow automatically.
 Function parameters are injected by name: `task` is available directly, and
-other parameters are matched against keys in declared `inputs` and declared
-`outputs`.
+other parameters are matched against the `id` of each declared input and output
+artifact.
 
 It also defaults `interaction` to the built-in CLI transport, which makes
 interactive code-first tasks easy to author.

@@ -15,7 +15,8 @@ runtime and executor, and registers it into a workflow with a decorator.
 - Automatic task registration in a workflow
 - In-process execution without spawning a shell
 - Support for both sync and async Python callables
-- Named argument injection from task context (`task`, `inputs`, `outputs`)
+- Named argument injection from task context (`task`, plus each input/output
+  artifact by its `id`)
 - A default CLI interaction transport for interactive tasks
 - The usual `HorusTask` behavior for input validation, output-based skip logic,
   events, and reset support
@@ -39,8 +40,8 @@ The decorator:
 1. creates a `FunctionTask`
 2. wraps the function in `PythonFunctionRuntime`
 3. uses `PythonFunctionExecutor` by default
-4. syncs the compatibility `task_id` field with the task name
-5. inserts the task into `wf.tasks` using the final task name as the key
+4. defaults the task `id` and `name` to the function's name
+5. appends the task to `wf.tasks` (a list)
 
 ## Basic Example
 
@@ -59,7 +60,8 @@ def my_task() -> None:
     print("Hello, Horus!")
 
 
-asyncio.run(wf.run())
+# Trigger the run with the task's id (defaults to the function name).
+asyncio.run(wf.run(trigger_id="my_task"))
 ```
 
 ### Parameters Are Injected By Name
@@ -67,10 +69,13 @@ asyncio.run(wf.run())
 `FunctionTask` callables can declare any subset of these names:
 
 - `task`: the full `FunctionTask` instance
-- any key from `inputs`
-- any key from `outputs`
+- the `id` of any declared input artifact
+- the `id` of any declared output artifact
 
-Horus matches parameters by name and calls your function with keyword args.
+Horus builds a name→artifact mapping keyed by `artifact.id`, matches your
+parameters against it, and calls your function with keyword args. Choose
+artifact IDs that are valid Python identifiers if you want to inject them as
+parameters.
 
 ```python
 from horus_builtin.artifact.file import FileArtifact
@@ -81,8 +86,8 @@ wf = HorusWorkflow(name="my_workflow")
 
 @FunctionTask.task(
     wf,
-    inputs={"input_file": FileArtifact(path="data.txt")},
-    outputs={"output_file": FileArtifact(path="result.txt")},
+    inputs=[FileArtifact(id="input_file", path="data.txt")],
+    outputs=[FileArtifact(id="output_file", path="result.txt")],
 )
 def process(
     input_file: FileArtifact,
@@ -94,10 +99,11 @@ def process(
     print(task.id)
 ```
 
-If your function declares a parameter name that is not available from that
-context, Horus raises a `ValueError` during runtime setup. If you declare
-`**kwargs`, Horus passes all available values from `task`, `inputs`, and
-`outputs`.
+The parameters `input_file` and `output_file` resolve to the artifacts whose
+`id` matches those names. If your function declares a parameter name that is not
+available from that context, Horus raises a `ValueError` during runtime setup.
+If you declare `**kwargs`, Horus passes all available values from `task`,
+`inputs`, and `outputs`.
 
 ### Async callables are supported
 
@@ -149,7 +155,7 @@ Prefer this:
 ```python
 @FunctionTask.task(
     wf,
-    outputs={"report": FileArtifact(path="report.txt")},
+    outputs=[FileArtifact(id="report", path="report.txt")],
 )
 def write_report() -> None:
     with open("report.txt", "w", encoding="utf-8") as f:

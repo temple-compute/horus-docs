@@ -31,7 +31,11 @@ Examples of what artifacts can represent (and how they materialize):
 
 Each artifact:
 
-- Has a **unique ID**
+- Has a **unique ID**. The `id` is more than a label: it is how tasks are wired
+  into a workflow DAG. A task that declares an input artifact with the same `id`
+  as another task's output artifact depends on that task. Output artifact IDs
+  must therefore be unique across a workflow (see
+  [DAG planning](./workflow.md#dag-planning)).
 - Has a **path** identifying its location on disk
 - Defines:
   - How to **check existence**
@@ -49,6 +53,8 @@ from horus_runtime.core.artifact.base import BaseArtifact
 
 class MyArtifact(BaseArtifact[str]):
     kind = "my_artifact"
+    kind_name = "My Artifact"
+    kind_description = "A short, human-readable description of this kind."
 
     def read(self) -> str:
         with open(self.path) as f:
@@ -72,6 +78,9 @@ class MyArtifact(BaseArtifact[str]):
   - `read() -> T`: Read and deserialize the artifact contents.
   - `write(value: T) -> None`: Write the native representation to disk.
   - `kind: str`: Concrete discriminator value used for registry dispatch and type resolution.
+- **Kind metadata** (optional ClassVars):
+  - `kind_name: ClassVar[str]`: short, human-readable name for the kind (e.g. `"File"`), used by client UIs, registries, and logging.
+  - `kind_description: ClassVar[str]`: a longer description of the kind. Defaults to an empty string. For translatable text, prefer a plugin-scoped translator (see the [SDK i18n guide](../i18n/index.md)).
 - **Provided implementations**:
   - `exists() -> bool`: Returns whether the path exists on disk.
   - `delete()`: Removes the file and emits a delete event.
