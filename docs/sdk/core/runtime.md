@@ -86,8 +86,9 @@ runtime = CommandRuntime(
 `CommandRuntime` formats placeholders from:
 
 - `task`
-- declared input artifacts
-- declared output artifacts
+- declared input artifacts, addressed by `artifact.id` (e.g. `{input_file.path}`
+  resolves the input whose `id` is `input_file`)
+- declared output artifacts, addressed by `artifact.id`
 - task fields available to the runtime implementation
 
 ## Python-Native Runtime Examples
@@ -106,8 +107,7 @@ runtime2 = PythonCodeStringRuntime(
 `PythonFunctionRuntime` builds keyword arguments from:
 
 - `task`
-- declared input artifacts (`inputs`)
-- declared output artifacts (`outputs`)
+- declared input and output artifacts, keyed by `artifact.id`
 
 When the callable does not declare `**kwargs`, `PythonFunctionRuntime`
 validates during `_setup_runtime()` that every declared function parameter can
