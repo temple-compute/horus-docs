@@ -58,6 +58,17 @@ class BaseTask(AutoRegistry, entry_point="task"):
     runs: int = 0
     skip_if_complete: bool = True
     interaction: BaseInteractionTransport | None = None
+    side_products: list[BaseArtifact] = []  # populated after execution
+
+    @property
+    def working_dir(self) -> Path:
+        """Per-task folder under the target's working directory."""
+        ...
+
+    @property
+    def side_artifacts_dir(self) -> Path:
+        """working_dir / "side-artifacts"; created before every run."""
+        ...
 
     @final
     async def run(self) -> None:
@@ -98,6 +109,15 @@ matches another task's output artifact `id` depends on that task. See
 Output artifact IDs must be unique across the whole workflow; runtimes that
 need a name→artifact mapping (for example to format a shell command or inject
 function parameters) build it on the fly keyed by `artifact.id`.
+
+### Side Artifacts
+
+`side_products` holds transient, undeclared artifacts produced during a run
+that are not consumed by any downstream task. The directory
+`task.side_artifacts_dir` (`working_dir / "side-artifacts"`) is created
+automatically by the executor before every run.
+
+See [Side Artifacts](./side-artifact.md) for the full guide.
 
 ### Kind metadata
 

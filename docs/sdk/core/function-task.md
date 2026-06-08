@@ -144,31 +144,33 @@ async def confirm_run(task: FunctionTask) -> None:
         raise RuntimeError("User cancelled execution")
 ```
 
-### Return values are ignored
+### Side Artifacts via Return Value
 
-The wrapped function's return value is not currently used by the workflow
-engine. In practice, tasks should communicate completion through declared
-artifacts and other side effects.
-
-Prefer this:
+A `FunctionTask` callable can return a `BaseArtifact` or `list[BaseArtifact]`
+to produce **side artifacts**: transient outputs that are not consumed by any
+downstream task. The executor captures the return value and stores it on
+`task.side_products`. The supported return type is:
 
 ```python
-@FunctionTask.task(
-    wf,
-    outputs=[FileArtifact(id="report", path="report.txt")],
-)
-def write_report() -> None:
-    with open("report.txt", "w", encoding="utf-8") as f:
-        f.write("done\n")
+BaseArtifact | list[BaseArtifact] | None
 ```
 
-Over this:
+Returning `None` (or nothing) is the default. Returning any other type logs a
+warning but does not fail the task.
 
 ```python
+from horus_builtin.artifact.file import FileArtifact
+from horus_builtin.task.function import FunctionTask
+
 @FunctionTask.task(wf)
-def write_report() -> FileArtifact:
-    return FileArtifact(path="report.txt")
+def generate_diagnostics(task: FunctionTask) -> FileArtifact:
+    log_path = task.side_artifacts_dir / "diag.txt"
+    log_path.write_text("all checks passed\n")
+    return FileArtifact(id="diag", path=log_path)
 ```
+
+See [Side Artifacts](./side-artifact.md) for the full guide, including how to
+produce side artifacts from shell and Python `exec`-based tasks.
 
 ### Output artifacts still drive skip logic
 
