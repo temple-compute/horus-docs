@@ -149,7 +149,7 @@ async def confirm_run(task: FunctionTask) -> None:
 A `FunctionTask` callable can return a `BaseArtifact` or `list[BaseArtifact]`
 to produce **side artifacts**: transient outputs that are not consumed by any
 downstream task. The executor captures the return value and stores it on
-`task.side_products`. The supported return type is:
+`task.side_artifacts`. The supported return type is:
 
 ```python
 BaseArtifact | list[BaseArtifact] | None

@@ -58,7 +58,7 @@ class BaseTask(AutoRegistry, entry_point="task"):
     runs: int = 0
     skip_if_complete: bool = True
     interaction: BaseInteractionTransport | None = None
-    side_products: list[BaseArtifact] = []  # populated after execution
+    side_artifacts: list[BaseArtifact] = []  # populated after execution
 
     @property
     def working_dir(self) -> Path:
@@ -112,7 +112,7 @@ function parameters) build it on the fly keyed by `artifact.id`.
 
 ### Side Artifacts
 
-`side_products` holds transient, undeclared artifacts produced during a run
+`side_artifacts` holds transient, undeclared artifacts produced during a run
 that are not consumed by any downstream task. The directory
 `task.side_artifacts_dir` (`working_dir / "side-artifacts"`) is created
 automatically by the executor before every run.

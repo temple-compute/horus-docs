@@ -20,10 +20,10 @@ Every task has two filesystem properties:
 - **`side_artifacts_dir`** — `working_dir / "side-artifacts"`, created
   automatically by the executor before every run.
 
-Side artifacts produced during a run are collected on `task.side_products`:
+Side artifacts produced during a run are collected on `task.side_artifacts`:
 
 ```python
-task.side_products: list[BaseArtifact]
+task.side_artifacts: list[BaseArtifact]
 ```
 
 Side-product capture is **best-effort**: a failure while handling the return
@@ -37,7 +37,7 @@ How a task produces side artifacts depends on which executor it uses.
 
 A function wrapped by `FunctionTask` (or any task using `PythonFunctionRuntime`)
 can return a `BaseArtifact` or `list[BaseArtifact]` to declare side products.
-The executor captures the return value and stores it in `task.side_products`.
+The executor captures the return value and stores it in `task.side_artifacts`.
 The supported return type is:
 
 ```python
@@ -131,9 +131,9 @@ task = HorusTask(
 ## Inspecting Side Artifacts
 
 Captured artifacts are accessible after the
-run via `task.side_products`:
+run via `task.side_artifacts`:
 
 ```python
-for artifact in task.side_products:
+for artifact in task.side_artifacts:
     print(artifact.id, artifact.path)
 ```
