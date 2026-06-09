@@ -26,7 +26,8 @@ The target owns dispatch and waiting. The executor focuses on execution only.
 
 - Declare compatible runtime types via `runtimes`
 - Implement `_execute()`, not `execute()`
-- `execute()` is the public `final` entry point and runs `ExecutorMiddleware`
+- `execute()` is the public `final` entry point: it creates `task.side_artifacts_dir`,
+  then runs `ExecutorMiddleware`, then calls `_execute()`
 - Use `kind: str` as the registry discriminator
 
 `BaseTask` validates runtime compatibility during model validation. If a task
@@ -113,7 +114,9 @@ task = HorusTask(
 ```
 
 `PythonExecExecutor` executes the runtime's code string in-process with
-`exec()`. The execution scope includes `ctx` and `task`.
+`exec()`. The execution scope includes `ctx`, `task`, and
+`HORUS_SIDE_ARTIFACTS_DIR` (a string path to `task.side_artifacts_dir`).
+See [Side Artifacts](./side-artifact.md#pythonexecexecutor).
 
 ## Registering Custom Executors
 
