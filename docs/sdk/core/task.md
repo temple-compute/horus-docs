@@ -58,7 +58,7 @@ class BaseTask(AutoRegistry, entry_point="task"):
     runs: int = 0
     skip_if_complete: bool = True
     interaction: BaseInteractionTransport | None = None
-    side_artifacts: list[BaseArtifact] = []  # populated after execution
+    side_artifacts: list[BaseArtifact] = Field(default_factory=list)
 
     @property
     def working_dir(self) -> Path:
