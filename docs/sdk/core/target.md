@@ -5,14 +5,14 @@ title: Target
 
 # Target System
 
-Targets describe **where** a task runs — and expose the **agentless channel**
+Targets describe **where** a task runs and expose the **agentless channel**
 used to run it there.
 
 A target is two things:
 
-1. **Placement and identity** — which machine, agent, or environment boundary
+1. **Placement and identity**. Which machine, agent, or environment boundary
    the task runs on (`location_id`, consumed by the transfer system).
-2. **An agentless channel** — a small I/O surface (`run_command`, `put_file`,
+2. **An agentless channel**. A small I/O surface (`run_command`, `put_file`,
    `get_file`, `mkdir`) that executors use to run commands and move files on
    that location **without requiring any Horus installation on the remote
    side**.
@@ -20,7 +20,7 @@ A target is two things:
 `task.run()` always executes on the orchestrator. The executor renders the
 payload and pushes the actual work to the target's channel, so the *same*
 runtime and executor pair runs unchanged on a local target or a remote SSH
-target — only the channel implementation differs.
+target, only the channel implementation differs.
 
 In short:
 
@@ -41,15 +41,15 @@ the executor runs it there through the target's channel.
 
 ## The dispatch lifecycle is shared
 
-The dispatch lifecycle — `_dispatch`, `wait`, `cancel`, `get_status` — lives on
+The dispatch lifecycle: `_dispatch`, `wait`, `cancel`, `get_status` lives on
 `BaseTarget` as a **concrete default**: `_dispatch` schedules
 `asyncio.create_task(task.run())` on the orchestrator's event loop, and the
 other methods drive that task. Because `task.run()` runs on the orchestrator
 for *every* target (local or remote), most targets never override the
 lifecycle. A concrete target only implements:
 
-- `location_id` — its placement identity
-- `access_cost` — transfer cost hints
+- `location_id`: its placement identity
+- `access_cost`: transfer cost hints
 - the four channel primitives
 
 `dispatch()` remains the public `@final` entry point and is the only lifecycle
@@ -58,7 +58,7 @@ method wrapped by `TargetMiddleware` today.
 ## Targets are agentless channels
 
 The channel is the low-level surface executors use to do work on the target.
-It never assumes Horus is installed on the other side — only the binaries the
+It never assumes Horus is installed on the other side, only the binaries the
 command itself names (a shell, `docker`, `sbatch`, …).
 
 ```python
@@ -81,7 +81,7 @@ class ChannelProcess(ABC):
     def signal(self, sig: int) -> None: ...
 ```
 
-Semantics every channel implementation honours:
+Semantics every channel implementation must follow:
 
 - **Streams are bytes.** Callers decode as needed.
 - **`env` merges** onto the channel's base environment (for a local target,

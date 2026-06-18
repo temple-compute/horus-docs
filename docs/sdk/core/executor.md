@@ -27,7 +27,7 @@ than spawning processes directly. A channel-driven executor renders the payload
 with `task.runtime`, then calls `task.target.run_command(...)` and drives the
 returned `ChannelProcess`. Because the channel abstracts *where* a command runs,
 the same executor works on a local target or a remote SSH target with nothing
-installed on the remote side — see
+installed on the remote side. See
 [Targets are agentless channels](./target.md#targets-are-agentless-channels).
 
 In-process executors (`PythonExecExecutor`, `PythonFunctionExecutor`) run Python
