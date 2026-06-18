@@ -22,12 +22,26 @@ The task itself is responsible for orchestration concerns such as input
 validation, event emission, error handling, and incrementing the run counter.
 The target owns dispatch and waiting. The executor focuses on execution only.
 
+Command-based executors run their work **through the target's channel** rather
+than spawning processes directly. A channel-driven executor renders the payload
+with `task.runtime`, then calls `task.target.run_command(...)` and drives the
+returned `ChannelProcess`. Because the channel abstracts *where* a command runs,
+the same executor works on a local target or a remote SSH target with nothing
+installed on the remote side — see
+[Targets are agentless channels](./target.md#targets-are-agentless-channels).
+
+In-process executors (`PythonExecExecutor`, `PythonFunctionExecutor`) run Python
+inside the orchestrator instead of through a channel, so they are only valid on
+local, in-process targets.
+
 ### Contract
 
 - Declare compatible runtime types via `runtimes`
 - Implement `_execute()`, not `execute()`
-- `execute()` is the public `final` entry point: it creates `task.side_artifacts_dir`,
-  then runs `ExecutorMiddleware`, then calls `_execute()`
+- `execute()` is the public `final` entry point: it creates
+  `task.side_artifacts_dir` **through the target's channel**
+  (`await task.target.mkdir(...)`), runs `ExecutorMiddleware`, calls
+  `_execute()`, then collects side artifacts
 - Use `kind: str` as the registry discriminator
 
 `BaseTask` validates runtime compatibility during model validation. If a task
@@ -73,11 +87,15 @@ aliased to `_(...)`) so descriptions are translatable without depending on
 
 ## Built-in Executors
 
-- `ShellExecutor`: executes a `CommandRuntime`
+- `ShellExecutor`: runs a `CommandRuntime` through the target's channel
+  (`task.target.run_command(...)`), so it works on local **and** remote targets.
+  It exposes `HORUS_SIDE_ARTIFACTS_DIR` in the command environment, raises
+  `TaskExecutionError` on a non-zero exit, and on cancellation group-kills the
+  process via the `ChannelProcess` handle.
 - `PythonFunctionExecutor`: executes a `PythonFunctionRuntime` in-process by
-  calling the wrapped Python function directly
+  calling the wrapped Python function directly (local targets only)
 - `PythonExecExecutor`: executes a `PythonCodeStringRuntime` in-process using
-  `exec()`
+  `exec()` (local targets only)
 
 ## Example
 
