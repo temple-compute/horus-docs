@@ -86,7 +86,7 @@ Semantics every channel implementation must follow:
 - **Streams are bytes.** Callers decode as needed.
 - **`env` merges** onto the channel's base environment (for a local target,
   `os.environ`; for SSH, the remote login environment).
-- **`cwd` is a target-side path** that the channel applies — locally via the
+- **`cwd` is a target-side path** that the channel applies. Locally via the
   subprocess `cwd`, remotely by inlining `cd <cwd> && …`.
 
 ## Base Target
@@ -170,7 +170,7 @@ file artifacts that already exist. Its channel implements `run_command` with
 `asyncio.create_subprocess_shell(..., start_new_session=True)` so each command
 leads its own process group; `ChannelProcess.kill()` then signals the whole
 group (`os.killpg`), so a command that spawns children leaves no orphans.
-`put_file` / `get_file` / `mkdir` map the remote paths to a local path.
+`put_file` / `get_file` / `mkdir` map the remote paths to local paths.
 
 ## Remote Targets
 
