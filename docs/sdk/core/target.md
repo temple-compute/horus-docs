@@ -86,13 +86,8 @@ Semantics every channel implementation must follow:
 - **Streams are bytes.** Callers decode as needed.
 - **`env` merges** onto the channel's base environment (for a local target,
   `os.environ`; for SSH, the remote login environment).
-- **`cwd` is a target-side path** that the channel applies — locally via the
+- **`cwd` is a target-side path** that the channel applies. Locally via the
   subprocess `cwd`, remotely by inlining `cd <cwd> && …`.
-- **Target-side paths are `RemotePath`** (an alias for `PurePosixPath`). They
-  denote POSIX paths on the *target* host and are never opened or walked on the
-  local filesystem — only the target's own channel methods may touch them.
-  `working_directory`, `task.working_dir`, and `task.side_artifacts_dir` are all
-  `RemotePath`.
 
 ## Base Target
 
@@ -104,8 +99,8 @@ class BaseTarget(AutoRegistry, entry_point="target"):
     kind: str
     kind_name: ClassVar[str] = "Target"
     kind_description: ClassVar[str] = _("Base target")
-    working_directory: RemotePath = Field(
-        default_factory=lambda: RemotePath(Path.cwd())
+    working_directory: str = Field(
+        default_factory=lambda: str(Path.cwd())
     )
 
     # --- placement identity (implement) ---
@@ -139,8 +134,7 @@ class BaseTarget(AutoRegistry, entry_point="target"):
 ### Contract
 
 - `location_id`: stable URI-like identifier for the physical location
-- `working_directory`: `RemotePath` base directory **on the target host** where
-  per-task working directories are created
+- `working_directory`: base directory **on the target host** where per-task working directories are created
 - `dispatch()`: public `@final` entry point. Sets `task.status = PENDING`, runs
   `TargetMiddleware`, and delegates to `_dispatch()`
 - `_dispatch()` / `wait()` / `cancel()` / `get_status()`: concrete defaults that
@@ -176,7 +170,7 @@ file artifacts that already exist. Its channel implements `run_command` with
 `asyncio.create_subprocess_shell(..., start_new_session=True)` so each command
 leads its own process group; `ChannelProcess.kill()` then signals the whole
 group (`os.killpg`), so a command that spawns children leaves no orphans.
-`put_file` / `get_file` / `mkdir` map the `RemotePath` to a local `Path`.
+`put_file` / `get_file` / `mkdir` map the remote paths to local paths.
 
 ## Remote Targets
 
