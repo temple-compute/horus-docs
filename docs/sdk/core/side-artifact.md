@@ -13,21 +13,54 @@ files, or any output that is useful to examine but does not feed the next step.
 
 ## How They Work
 
-Every task has two filesystem properties:
+Every task has two filesystem properties, both **target-side path strings**
+(they live on whatever host the task runs on, which may not be the
+orchestrator):
 
 - **`working_dir`** — a per-task folder under its target's working directory
   where inputs are materialized and outputs are written.
-- **`side_artifacts_dir`** — `working_dir / "side-artifacts"`, created
-  automatically by the executor before every run.
+- **`side_artifacts_dir`** — the `side-artifacts` subdirectory of `working_dir`,
+  created automatically by the executor before every run.
 
-Side artifacts produced during a run are collected on `task.side_artifacts`:
+A task writes side products into `side_artifacts_dir` on the target. After the
+run, the executor **collects** them back to the orchestrator and exposes them on
+`task.side_artifacts`:
 
 ```python
 task.side_artifacts: list[BaseArtifact]
 ```
 
-Side-product capture is **best-effort**: a failure while handling the return
-value never fails the task itself.
+Side-product capture is **best-effort**: a failure while collecting never fails
+the task itself.
+
+## Collection
+
+Because a task may run on a remote target, `side_artifacts_dir` is not assumed
+to be on the orchestrator's filesystem. After `_execute()` finishes,
+`BaseExecutor.collect_side_artifacts()` brings the products back **over the
+target channel**, the same mechanism for local and remote targets:
+
+1. `list_dir(side_artifacts_dir)` enumerates the top-level entries on the
+   target (no shell, OS-agnostic; symlinks are skipped).
+2. Each entry is pulled to a local temporary directory with `get_file`. Files
+   directly, folders by recursively listing + fetching (empty directories are
+   preserved).
+3. Each top-level entry is registered on `task.side_artifacts` as a
+   `FileArtifact` (file) or `FolderArtifact` (folder), with a **real local
+   path** on the orchestrator. Ready for plugins to read, upload, or visualize. In a
+   future release, the executor may support other artifact types (e.g., `ImageArtifact`).
+
+Side artifacts are meant to be small and inspectable. Files larger than
+`HorusRuntimeSettings.MAX_SIDE_ARTIFACT_BYTES` (default 100 MB, override with
+`HORUS_RUNTIME_MAX_SIDE_ARTIFACT_BYTES`) are skipped with a warning. **Large
+data should be declared as task `inputs`/`outputs` instead**, those have their
+own [transfer strategies](./transfer.md) and are not pulled back wholesale.
+
+:::note
+A custom target only needs to implement the channel's `list_dir` (alongside
+`get_file`) for collection to work; the recursion and registration live in the
+executor. See [Targets](./target.md#targets-are-agentless-channels).
+:::
 
 ## Producing Side Artifacts
 
@@ -47,7 +80,12 @@ BaseArtifact | list[BaseArtifact] | None
 Returning `None` (or nothing) is the default and produces no side products.
 Returning any other type logs a warning and is otherwise ignored.
 
+`side_artifacts_dir` is a path string, so wrap it in `Path` to build child
+paths:
+
 ```python
+from pathlib import Path
+
 from horus_builtin.artifact.file import FileArtifact
 from horus_builtin.task.function import FunctionTask
 from horus_builtin.workflow.horus_workflow import HorusWorkflow
@@ -56,7 +94,7 @@ wf = HorusWorkflow(name="my_workflow")
 
 @FunctionTask.task(wf)
 def generate_report(task: FunctionTask) -> FileArtifact:
-    log_path = task.side_artifacts_dir / "report.txt"
+    log_path = Path(task.side_artifacts_dir) / "report.txt"
     log_path.write_text("diagnostics: all checks passed\n")
     return FileArtifact(id="report", path=log_path)
 ```
@@ -66,8 +104,8 @@ You can also return multiple artifacts:
 ```python
 @FunctionTask.task(wf)
 def generate_report(task: FunctionTask) -> list[FileArtifact]:
-    a = task.side_artifacts_dir / "summary.txt"
-    b = task.side_artifacts_dir / "details.txt"
+    a = Path(task.side_artifacts_dir) / "summary.txt"
+    b = Path(task.side_artifacts_dir) / "details.txt"
     a.write_text("summary\n")
     b.write_text("details\n")
     return [

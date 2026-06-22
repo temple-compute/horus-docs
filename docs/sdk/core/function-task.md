@@ -159,12 +159,14 @@ Returning `None` (or nothing) is the default. Returning any other type logs a
 warning but does not fail the task.
 
 ```python
+from pathlib import Path
+
 from horus_builtin.artifact.file import FileArtifact
 from horus_builtin.task.function import FunctionTask
 
 @FunctionTask.task(wf)
 def generate_diagnostics(task: FunctionTask) -> FileArtifact:
-    log_path = task.side_artifacts_dir / "diag.txt"
+    log_path = Path(task.side_artifacts_dir) / "diag.txt"
     log_path.write_text("all checks passed\n")
     return FileArtifact(id="diag", path=log_path)
 ```
