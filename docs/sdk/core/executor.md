@@ -45,7 +45,7 @@ local, in-process targets.
   `collect_side_artifacts()` lists the directory with `list_dir` and pulls each
   file/folder back to a local temp dir with `get_file`, so it works on local
   **and** remote targets. It is best-effort (failures are logged, never masking
-  the task) and skips files over `MAX_SIDE_ARTIFACT_BYTES`. See
+  the task) and skips files over `HorusRuntimeSettings.MAX_SIDE_ARTIFACT_BYTES`. See
   [Side Artifacts](./side-artifact.md#collection)
 - Use `kind: str` as the registry discriminator
 

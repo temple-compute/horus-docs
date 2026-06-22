@@ -67,7 +67,7 @@ class BaseTask(AutoRegistry, entry_point="task"):
 
     @property
     def side_artifacts_dir(self) -> str:
-        """working_dir / "side-artifacts" on the target; created before every run."""
+        """The "side-artifacts" subdirectory of working_dir on the target; created before every run."""
         ...
 
     @final
@@ -114,8 +114,9 @@ function parameters) build it on the fly keyed by `artifact.id`.
 
 `side_artifacts` holds transient, undeclared artifacts produced during a run
 that are not consumed by any downstream task. The directory
-`task.side_artifacts_dir` (`working_dir / "side-artifacts"`) is a **target-side
-path** (a `str`), created automatically by the executor before every run. After
+`task.side_artifacts_dir` (the `side-artifacts` subdirectory of `working_dir`)
+is a **target-side path** (a `str`), created automatically by the executor
+before every run. After
 the run, the executor collects whatever lands there back to the orchestrator
 over the target's channel and populates `task.side_artifacts`.
 

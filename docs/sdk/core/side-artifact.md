@@ -19,8 +19,8 @@ orchestrator):
 
 - **`working_dir`** — a per-task folder under its target's working directory
   where inputs are materialized and outputs are written.
-- **`side_artifacts_dir`** — `working_dir / "side-artifacts"`, created
-  automatically by the executor before every run.
+- **`side_artifacts_dir`** — the `side-artifacts` subdirectory of `working_dir`,
+  created automatically by the executor before every run.
 
 A task writes side products into `side_artifacts_dir` on the target. After the
 run, the executor **collects** them back to the orchestrator and exposes them on
