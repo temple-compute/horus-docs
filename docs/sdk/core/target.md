@@ -66,6 +66,19 @@ async def run_command(self, cmd, *, cwd=None, env=None) -> ChannelProcess
 async def put_file(self, content, remote_path) -> None   # bytes | local Path
 async def get_file(self, remote_path) -> bytes
 async def mkdir(self, path) -> None                      # mkdir -p semantics
+async def list_dir(self, path) -> list[RemoteDirEntry]   # non-recursive listing
+```
+
+`list_dir` returns the immediate children of a target-side directory as
+`RemoteDirEntry` tuples — everything a caller needs to walk and fetch a tree
+without ever touching the local filesystem:
+
+```python
+class RemoteDirEntry(NamedTuple):
+    name: str       # basename
+    path: str       # absolute path on the target host
+    is_dir: bool
+    size: int       # file size in bytes; 0 for directories
 ```
 
 `run_command` returns a `ChannelProcess` handle:
@@ -88,6 +101,10 @@ Semantics every channel implementation must follow:
   `os.environ`; for SSH, the remote login environment).
 - **`cwd` is a target-side path** that the channel applies. Locally via the
   subprocess `cwd`, remotely by inlining `cd <cwd> && …`.
+- **`list_dir` is native and OS-agnostic.** Implementations must use a
+  non-shell mechanism (`pathlib` locally, SFTP/agent API remotely) so listing
+  works regardless of the target's OS, and must **skip symlinks** (cycles and
+  noise). Returns `[]` for a missing directory.
 
 ## Base Target
 
@@ -129,6 +146,8 @@ class BaseTarget(AutoRegistry, entry_point="target"):
     async def get_file(self, remote_path) -> bytes: ...
     @abstractmethod
     async def mkdir(self, path) -> None: ...
+    @abstractmethod
+    async def list_dir(self, path) -> list[RemoteDirEntry]: ...
 ```
 
 ### Contract
@@ -140,7 +159,9 @@ class BaseTarget(AutoRegistry, entry_point="target"):
 - `_dispatch()` / `wait()` / `cancel()` / `get_status()`: concrete defaults that
   run and drive `task.run()` on the orchestrator — override only for a
   fundamentally different dispatch model
-- `run_command` / `put_file` / `get_file` / `mkdir`: the agentless channel
+- `run_command` / `put_file` / `get_file` / `mkdir` / `list_dir`: the agentless
+  channel. `list_dir` enumerates a target-side directory (used to collect side
+  artifacts back to the orchestrator — see [Side Artifacts](./side-artifact.md))
 - `access_cost()`: estimate the cost of reading an artifact from this target
 - `recover()`: optionally reconnect to a previously dispatched task
 
@@ -170,7 +191,8 @@ file artifacts that already exist. Its channel implements `run_command` with
 `asyncio.create_subprocess_shell(..., start_new_session=True)` so each command
 leads its own process group; `ChannelProcess.kill()` then signals the whole
 group (`os.killpg`), so a command that spawns children leaves no orphans.
-`put_file` / `get_file` / `mkdir` map the remote paths to local paths.
+`put_file` / `get_file` / `mkdir` map the remote paths to local paths, and
+`list_dir` walks them with `pathlib`.
 
 ## Remote Targets
 
@@ -178,8 +200,9 @@ Remote targets implement the same channel over a transport, so executors don't
 change. The `horus_ssh` plugin provides `SSHTarget` (`kind="ssh"`): it runs
 commands and moves files over a single persistent `asyncssh` connection
 (`create_process` + SFTP) and **requires nothing on the remote host but the
-binaries the command uses**. It inherits the dispatch lifecycle from
-`BaseTarget` unchanged.
+binaries the command uses**. It implements `list_dir` over SFTP (no shell), so
+side-artifact collection works the same as locally. It inherits the dispatch
+lifecycle from `BaseTarget` unchanged.
 
 ## Example
 

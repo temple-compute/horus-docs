@@ -41,7 +41,12 @@ local, in-process targets.
 - `execute()` is the public `final` entry point: it creates
   `task.side_artifacts_dir` **through the target's channel**
   (`await task.target.mkdir(...)`), runs `ExecutorMiddleware`, calls
-  `_execute()`, then collects side artifacts
+  `_execute()`, then collects side artifacts. Collection is **channel-based**:
+  `collect_side_artifacts()` lists the directory with `list_dir` and pulls each
+  file/folder back to a local temp dir with `get_file`, so it works on local
+  **and** remote targets. It is best-effort (failures are logged, never masking
+  the task) and skips files over `MAX_SIDE_ARTIFACT_BYTES`. See
+  [Side Artifacts](./side-artifact.md#collection)
 - Use `kind: str` as the registry discriminator
 
 `BaseTask` validates runtime compatibility during model validation. If a task
