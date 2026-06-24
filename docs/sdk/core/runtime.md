@@ -79,17 +79,21 @@ aliased as `_`).
 from horus_builtin.runtime.command import CommandRuntime
 
 runtime = CommandRuntime(
-    command="cp {input_file.path} {task.name}.bak",
+    command="cp ${input_file.path} ${task.name}.bak",
 )
 ```
 
 `CommandRuntime` formats placeholders from:
 
 - `task`
-- declared input artifacts, addressed by `artifact.id` (e.g. `{input_file.path}`
+- declared input artifacts, addressed by `artifact.id` (e.g. `${input_file.path}`
   resolves the input whose `id` is `input_file`)
 - declared output artifacts, addressed by `artifact.id`
 - task fields available to the runtime implementation
+
+See [Artifact Substitution](./artifact-substitution.md) for the placeholder
+syntax across every runtime (`$id` / `${id.path}` for all string-templating
+runtimes).
 
 ## Python-Native Runtime Examples
 
