@@ -31,11 +31,13 @@ Examples of what artifacts can represent (and how they materialize):
 
 Each artifact:
 
-- Has a **unique ID**. The `id` is more than a label: it is how tasks are wired
-  into a workflow DAG. A task that declares an input artifact with the same `id`
-  as another task's output artifact depends on that task. Output artifact IDs
-  must therefore be unique across a workflow (see
-  [DAG planning](./workflow.md#dag-planning)).
+- Has a stable **ID**. The `id` identifies the artifact within its task and is
+  the handle that workflow **edges** wire together (a producer output to a
+  consumer input). Tasks are not linked by matching `id`s — an explicit edge
+  does the wiring — so a producer output and the consumer input it feeds may
+  have different `id`s. Within a single task, input and output `id`s must be
+  unique (see [DAG planning](./workflow.md#dag-planning) and
+  [edges](./workflow.md#edges)).
 - Has a **path** identifying its location on disk
 - Defines:
   - How to **check existence**

@@ -101,14 +101,16 @@ Subclasses must implement `_run()`, `is_complete()`, and `_reset()`.
 
 ### `inputs` and `outputs`
 
-Each artifact carries its own `id`, and that `id` is
-what links tasks together in the workflow DAG: a task whose input artifact `id`
-matches another task's output artifact `id` depends on that task. See
-[DAG planning](./workflow.md#dag-planning).
+Each artifact carries its own `id`. Tasks are linked into the workflow DAG by
+explicit **edges**, not by matching artifact `id`s: an edge connects one task's
+output to another task's input, and the consumer keeps its own input `id`
+regardless of what the producer named its output. See
+[DAG planning](./workflow.md#dag-planning) and [edges](./workflow.md#edges).
 
-Output artifact IDs must be unique across the whole workflow; runtimes that
-need a name→artifact mapping (for example to format a shell command or inject
-function parameters) build it on the fly keyed by `artifact.id`.
+Output and input `id`s must be unique **within a task**, but the same output
+`id` may appear on different tasks. Runtimes that need a name→artifact mapping
+(for example to format a shell command or inject function parameters) build it
+on the fly, keyed by `artifact.id`, from that task's own inputs and outputs.
 
 ### Side Artifacts
 

@@ -9,10 +9,17 @@ Workflows orchestrate a set of tasks connected as a **directed acyclic graph
 (DAG)**.
 
 Tasks are not executed in definition order. Instead, Horus derives the
-execution order from the data dependencies between tasks: a task that consumes
-an artifact produced by another task automatically runs after it. The workflow
-author declares *what* each task consumes and produces; the runtime works out
-*when* each task runs (see [DAG planning](#dag-planning)).
+execution order from the workflow's explicit **edges**: each edge wires one
+task's output to another task's input, declaring that the producer must run
+before the consumer. The workflow author declares the tasks and the edges
+between them; the runtime works out *when* each task runs (see
+[DAG planning](#dag-planning)).
+
+> **Edges are the sole source of truth for the DAG.** Earlier versions inferred
+> dependencies by matching input/output artifact `id`s. That implicit matching
+> is gone: two tasks that happen to share an artifact `id` are **not** linked
+> unless an edge connects them, and a workflow with no edges runs its tasks as
+> independent nodes with no ordering.
 
 ## Core Concept
 
@@ -51,6 +58,7 @@ class BaseWorkflow(AutoRegistry, entry_point="workflow"):
     name: str
     tasks: list[BaseTask] = Field(default_factory=list)
     artifacts: list[BaseArtifact] = Field(default_factory=list)
+    edges: list[WorkflowEdge] = Field(default_factory=list)
     orchestrator_target: BaseTarget | None = None
     status: WorkflowStatus = WorkflowStatus.IDLE
 
@@ -59,7 +67,11 @@ class BaseWorkflow(AutoRegistry, entry_point="workflow"):
     def from_yaml(cls, path: str | Path) -> Self:
         """Load and construct a workflow from a YAML file."""
 
-    async def transfer_artifacts(self, task: BaseTask) -> None:
+    async def transfer_artifacts(
+        self,
+        task: BaseTask,
+        source_map: dict[tuple[str, str], _EdgeSource] | None = None,
+    ) -> None:
         """Transfer input artifacts of task to its target before dispatch."""
         ...
 
@@ -98,12 +110,52 @@ the list order is not what determines execution order: the DAG does.
 
 `artifacts` is a list of **root artifacts**: artifacts that exist before the
 workflow runs and are not produced by any task (for example a dataset file or a
-user upload). Tasks consume them by declaring an input artifact whose `id`
-matches a root artifact's `id`.
+user upload). A task consumes a root artifact through an **edge** whose source
+is the root (using the `artifact-<rootId>` source convention, see
+[`edges`](#edges)).
 
-Root artifacts have no producer, so during DAG planning they become the entry
-points of the graph, and the transfer layer treats them as coming from
+Root artifacts have no producer task, so they create no dependency during DAG
+planning, and the transfer layer treats them as coming from
 `orchestrator_target`.
+
+Root artifact `id`s must be unique among the root artifacts.
+
+### `edges`
+
+`edges` is a list of `WorkflowEdge` connections, and the **single source of
+truth** for both the DAG and the artifact transfer sources. Each edge wires one
+producer output to one consumer input:
+
+```python
+class WorkflowEdge(BaseModel):
+    source: str          # producer task id, or "artifact-<rootId>" for a root
+    source_output: str   # output artifact id on the source (or the root id)
+    target: str          # consumer task id
+    target_input: str    # input artifact id on the consumer task
+```
+
+A `source` that names a task declares a **dependency**: the source task must
+complete before the `target` task. A `source` of the form `artifact-<rootId>`
+is a **root source**: it feeds a user-provided root artifact into the input and
+adds no dependency.
+
+Edges are validated at construction time (see [Edge validation](#edge-validation)),
+so a typo cannot silently drop a dependency or misroute a transfer.
+
+```python
+from horus_runtime.core.workflow.edge import WorkflowEdge
+
+WorkflowEdge(
+    source="parse",          # task "parse" produces ...
+    source_output="parsed",  # ... its output artifact "parsed" ...
+    target="dock",           # ... which feeds task "dock" ...
+    target_input="ligand",   # ... as its input "ligand".
+)
+```
+
+Because the connection is explicit, the producer output and the consumer input
+may carry **different** `id`s (`parsed` → `ligand`); the old requirement that
+they share an `id` no longer applies.
 
 ### Kind metadata
 
@@ -126,16 +178,23 @@ artifact from a source that has not been configured.
 
 Called by `_run()` implementations before each `task.target.dispatch(task)`. It:
 
-1. builds a reverse map from output artifact ID to the target of the task that produced it
-2. resolves the source target for each input artifact
-3. looks up the registered `BaseTransferStrategy` for the `(source, destination)` pair
-4. calls `strategy.transfer(artifact, source, task.target)`
+1. resolves, for each input, the source from the workflow `edges`: a task source
+   yields the producer task's target and its output artifact; a root source (or
+   an input with no edge) is sourced from `orchestrator_target`
+2. looks up the registered `BaseTransferStrategy` for the `(source, destination)` pair
+3. transfers a copy of the **producing** artifact (it carries the `id` the data
+   is stored under) and then repoints the consumer input's `path` at the
+   materialized result, so the input keeps its own `id` for templating
+
+`_run()` builds the edge source map once and passes it to every
+`transfer_artifacts()` call via the optional `source_map` argument; omitting it
+rebuilds the map on demand.
 
 See [Transfer Strategy](./transfer.md) for details.
 
 ## Built-in Workflow
 
-- `HorusWorkflow`: builds the DAG from task inputs/outputs, computes an
+- `HorusWorkflow`: builds the DAG from the workflow `edges`, computes an
   execution plan from the trigger, and runs tasks in dependency order, skipping
   tasks whose outputs already exist when `task.skip_if_complete` is `True`
 
@@ -153,10 +212,23 @@ The runtime plans the DAG around that task (see [DAG planning](#dag-planning)).
 import asyncio
 
 from horus_builtin.workflow.horus_workflow import HorusWorkflow
+from horus_runtime.core.workflow.edge import WorkflowEdge
 
-wf = HorusWorkflow(name="example", tasks=[...])
+wf = HorusWorkflow(
+    name="example",
+    tasks=[prepare, final_step],
+    edges=[
+        WorkflowEdge(
+            source="prepare",
+            source_output="dataset",
+            target="final_step",
+            target_input="input",
+        ),
+    ],
+)
 
 # Run the workflow, triggered by the task whose id is "final_step".
+# The edge pulls "prepare" in as an ancestor, so it runs first.
 asyncio.run(wf.run(trigger_id="final_step"))
 ```
 
@@ -167,31 +239,51 @@ they are the handles used for dependency resolution, for selecting a trigger,
 and for keying tasks internally.
 
 Uniqueness is enforced at construction time by a model validator: a workflow
-with two tasks sharing an `id` raises `TaskIdsAreNotUniqueError`. Output
-artifact IDs must likewise be unique across all tasks and root artifacts, or
-`ArtifactIdsAreNotUniqueError` is raised.
+with two tasks sharing an `id` raises `TaskIdsAreNotUniqueError`.
+
+Artifact `id` uniqueness is enforced only where edge resolution needs it
+(`ArtifactIdsAreNotUniqueError` otherwise):
+
+- **output** `id`s must be unique **within each task**;
+- **input** `id`s must be unique **within each task**;
+- **root** artifact `id`s must be unique among the root artifacts.
+
+Output `id`s may now **repeat across tasks**: because edges resolve on
+`(task id, output id)` and task `id`s are unique, the same reusable task (sharing
+a `definition_id`) can be placed in a workflow more than once, each placement
+keeping its own unique task `id`.
 
 ## DAG planning
 
 A workflow is a directed acyclic graph where **nodes are tasks** and **edges
-are artifacts**. The graph is derived entirely from the artifact IDs declared
-on each task.
+are the workflow's `WorkflowEdge` connections**. The graph is derived entirely
+from `edges` — never from artifact-`id` matching.
 
 ### How dependencies are derived
 
-1. **Producers.** Every output artifact maps to the task that declares it:
-   `artifact_id -> task_id`. Output artifact IDs must be unique, so each
-   artifact has at most one producer.
-2. **Dependencies.** For each task, every input artifact whose `id` matches
-   another task's output artifact creates an edge: the consuming task depends on
-   the producing task. Input artifacts with no producer are **root inputs**
-   (declared in the workflow's `artifacts` list, or otherwise present on disk);
-   they create no edge.
+1. **Edges.** Each edge whose `source` is a task adds a dependency: the
+   `target` task depends on the `source` task. Edges whose `source` is a root
+   artifact (`artifact-<rootId>`) add no dependency — root inputs are graph
+   entry points sourced from `orchestrator_target`.
+2. **No edges, no ordering.** A workflow with no edges has fully independent
+   tasks. Sharing an artifact `id` across two tasks does **not** link them.
 3. **Ordering.** The resulting graph is sorted topologically (Kahn's algorithm,
    with ties broken deterministically by id) to produce the execution order.
 
-If the inputs and outputs form a cycle, planning fails with
-`CyclicDependencyError`.
+If the edges form a cycle, planning fails with `CyclicDependencyError`.
+
+### Edge validation
+
+Because edges are the only thing wiring the DAG, they are validated at workflow
+construction time so a typo cannot silently drop a dependency or misroute a
+transfer. A workflow raises:
+
+- `UnknownEdgeEndpointError` if an edge references a missing task, a
+  `target_input` that the target task does not declare, a `source_output` that
+  the source task does not produce, or a root `source_output` that no root
+  artifact declares;
+- `DuplicateEdgeTargetError` if two edges feed the same
+  `(target, target_input)` — each consumer input may be fed by at most one edge.
 
 ### Trigger IDs
 
@@ -214,10 +306,6 @@ upstream work is not redundantly recomputed.
 Passing a `trigger_id` that does not correspond to a task in the workflow raises
 `UnknownTaskError` (from `execution_plan`). `HorusWorkflow._run` likewise rejects
 an unknown trigger before planning.
-
-> To execute the full graph in topological order, the underlying
-> `execution_plan(tasks, trigger_id=None)` accepts `None` as the trigger and
-> falls back to the complete DAG.
 
 ## Registering Custom Workflows
 
