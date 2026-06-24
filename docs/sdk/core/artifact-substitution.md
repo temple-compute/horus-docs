@@ -104,7 +104,7 @@ PythonCodeStringRuntime(
     code=(
         "with open('$pdb_in') as f:\n"
         "    first = f.read().split('\\n')[0]\n"
-        "with open('${result}') as f2:\n"
+        "with open('${result}', 'w', encoding='utf-8') as f2:\n"
         "    f2.write(first)\n"
     ),
 )
