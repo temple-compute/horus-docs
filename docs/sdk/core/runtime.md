@@ -91,6 +91,9 @@ runtime = CommandRuntime(
 - declared output artifacts, addressed by `artifact.id`
 - task fields available to the runtime implementation
 
+See [Artifact Substitution](./artifact-substitution.md) for the placeholder
+syntax across every runtime (`{id}` for commands, `$id` for Python code).
+
 ## Python-Native Runtime Examples
 
 ```python
