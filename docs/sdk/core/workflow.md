@@ -18,7 +18,7 @@ between them; the runtime works out *when* each task runs (see
 > **Edges are the sole source of truth for the DAG.** Earlier versions inferred
 > dependencies by matching input/output artifact `id`s. That implicit matching
 > is gone: two tasks that happen to share an artifact `id` are **not** linked
-> unless an edge connects them, and a workflow with no edges runs its tasks as
+> unless an edge connects them, and a workflow with no edges treats its tasks as
 > independent nodes with no ordering.
 
 ## Core Concept
@@ -70,7 +70,7 @@ class BaseWorkflow(AutoRegistry, entry_point="workflow"):
     async def transfer_artifacts(
         self,
         task: BaseTask,
-        source_map: dict[tuple[str, str], _EdgeSource] | None = None,
+        source_map: dict[tuple[str, str], EdgeSource] | None = None,
     ) -> None:
         """Transfer input artifacts of task to its target before dispatch."""
         ...
@@ -179,8 +179,8 @@ artifact from a source that has not been configured.
 Called by `_run()` implementations before each `task.target.dispatch(task)`. It:
 
 1. resolves, for each input, the source from the workflow `edges`: a task source
-   yields the producer task's target and its output artifact; a root source (or
-   an input with no edge) is sourced from `orchestrator_target`
+   yields the producer task's target and its output artifact; a root-source edge
+   yields the workflow's `orchestrator_target`
 2. looks up the registered `BaseTransferStrategy` for the `(source, destination)` pair
 3. transfers a copy of the **producing** artifact (it carries the `id` the data
    is stored under) and then repoints the consumer input's `path` at the
