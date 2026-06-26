@@ -59,6 +59,7 @@ class BaseTask(AutoRegistry, entry_point="task"):
     skip_if_complete: bool = True
     interaction: BaseInteractionTransport | None = None
     side_artifacts: list[BaseArtifact] = Field(default_factory=list)
+    resources: ResourceRequest | None = None
 
     @property
     def working_dir(self) -> str:
@@ -123,6 +124,73 @@ the run, the executor collects whatever lands there back to the orchestrator
 over the target's channel and populates `task.side_artifacts`.
 
 See [Side Artifacts](./side-artifact.md) for the full guide.
+
+### Resources
+
+A task can declare the compute resources it needs through the optional
+`resources` field. It holds a `ResourceRequest` — a small, target-agnostic model
+where every field is optional:
+
+```python
+from horus_runtime.core.resources import ResourceRequest
+from horus_builtin.task.horus_task import HorusTask
+
+task = HorusTask(
+    id="predict",
+    name="Boltz-2 prediction",
+    runtime=...,
+    executor=...,
+    target=...,
+    resources=ResourceRequest(gpus=1, memory_gb=32, vram_gb=40),
+)
+```
+
+The same thing in workflow YAML:
+
+```yaml
+- id: predict
+  name: Boltz-2 prediction
+  kind: horus_task
+  resources:
+    gpus: 1
+    memory_gb: 32
+    vram_gb: 40
+  # runtime / executor / target ...
+```
+
+| Field | Meaning |
+|-------|---------|
+| `cpus` | CPU cores to request (`None` lets the target decide) |
+| `gpus` | GPUs to request (defaults to `0`) |
+| `memory_gb` | System RAM, in GiB |
+| `vram_gb` | GPU memory per GPU, in GiB |
+| `walltime` | Maximum wall-clock time, a target-interpreted string (e.g. `"01:30:00"`) |
+
+Resources are **advisory hints**. The field defaults to `None`, so existing
+tasks and workflow YAML are unaffected. A *resource-aware* target translates the
+request into its own provisioning primitives — a Slurm target into `sbatch`
+directives, a Terraform target into a cloud instance type — while a target that
+does not understand resources simply ignores it. Unknown fields are rejected, so
+a typo in a workflow YAML surfaces as a validation error rather than being
+silently dropped.
+
+#### How a target reads `resources`
+
+Some targets provision lazily — for example a cloud target that spins up a node
+the first time an artifact is transferred to it, *before* the task is formally
+dispatched. So that those targets can see the request in time, the workflow
+binds the task to its target before transferring its inputs:
+
+```python
+def bind(self, task: BaseTask) -> None:
+    """Associate a task with this target ahead of dispatch, so a
+    resource-aware target can read task.resources while it provisions."""
+    self._task = task
+```
+
+By convention a target's own explicit settings take precedence over the task's
+request, so a target can override what a task asked for. See
+[Target](./target.md).
 
 ### Kind metadata
 
