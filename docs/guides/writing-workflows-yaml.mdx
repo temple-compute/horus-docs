@@ -155,7 +155,7 @@ tasks:
     target: { kind: local, working_directory: "./horus-work" }
     runtime:
       kind: command
-      command: "mkdir -p \"$(dirname $raw)\"\nsleep 1\necho 'rows: 1000' > $raw\n"
+      command: "mkdir -p \"$$(dirname $raw)\"\nsleep 1\necho 'rows: 1000' > $raw\n"
     executor:
       kind: shell
     outputs:

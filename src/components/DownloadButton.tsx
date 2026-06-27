@@ -17,7 +17,8 @@ export default function DownloadButton({
   file: string;
   label?: string;
 }): React.ReactElement {
-  const href = useBaseUrl(`/examples/${file}`);
+  const safeFile = file.split(/[\\/]/).pop() ?? file;
+  const href = useBaseUrl(`/examples/${safeFile}`);
   return (
     <a
       className="button button--primary button--sm"

@@ -35,7 +35,7 @@ tasks:
     target: { kind: local, working_directory: "./horus-work" }
     runtime:
       kind: command
-      command: "mkdir -p \"$(dirname $message)\"\necho 'Hello from Horus!' > $message\n"
+      command: "mkdir -p \"$$(dirname $message)\"\necho 'Hello from Horus!' > $message\n"
     executor:
       kind: shell
     outputs:
