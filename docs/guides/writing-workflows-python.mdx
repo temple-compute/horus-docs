@@ -1,0 +1,201 @@
+---
+sidebar_position: 5
+title: Writing workflows (Python)
+---
+
+import Tabs from "@theme/Tabs";
+import TabItem from "@theme/TabItem";
+import DownloadButton from "@site/src/components/DownloadButton";
+
+# Writing workflows in Python
+
+YAML works well when each task is a command. Use Python when a task needs real
+logic, such as reading and transforming files, calling a library, or prompting
+the user. Prompting is something YAML cannot do.
+
+You build the same workflow object, but you define tasks as Python functions
+with the `@FunctionTask.task` decorator and run the workflow with
+`render_workflow`, the same live dashboard `horus run` uses.
+
+## A minimal Python workflow
+
+Two tasks wired by an edge: one writes a greeting, the next reads it and
+uppercases it.
+
+<DownloadButton file="hello_workflow.py" />
+
+```python title="hello_workflow.py"
+from pathlib import Path
+
+from horus_builtin.artifact.file import FileArtifact
+from horus_builtin.event.tui_subscriber import render_workflow
+from horus_builtin.target.local import LocalTarget
+from horus_builtin.task.function import FunctionTask
+from horus_builtin.workflow.horus_workflow import HorusWorkflow
+from horus_runtime.context import HorusContext
+from horus_runtime.core.artifact.base import BaseArtifact
+from horus_runtime.core.workflow.edge import WorkflowEdge
+
+# Boot the runtime once before building or running anything.
+HorusContext.boot()
+
+wf = HorusWorkflow(name="hello_python")
+
+work = LocalTarget(working_directory="./horus-work")
+greeting = FileArtifact(id="greeting", path=Path("horus-out/greeting.txt"))
+shout = FileArtifact(id="shout", path=Path("horus-out/shout.txt"))
+
+
+# The task id and name default to the function name. The parameters after
+# `task` are the task's artifacts, matched by their id.
+@FunctionTask.task(wf, outputs=[greeting], target=work)
+async def make_greeting(
+    task: FunctionTask, greeting: FileArtifact
+) -> list[BaseArtifact]:
+    """Write a greeting to the output artifact."""
+    greeting.write("Hello from a Python workflow!")
+    return []
+
+
+@FunctionTask.task(wf, inputs=[greeting], outputs=[shout], target=work)
+async def shout_it(
+    task: FunctionTask, greeting: FileArtifact, shout: FileArtifact
+) -> list[BaseArtifact]:
+    """Read the greeting and write an uppercased version."""
+    shout.write(greeting.read().upper())
+    return []
+
+
+wf.edges.append(
+    WorkflowEdge(
+        source="make_greeting",
+        source_output="greeting",
+        target="shout_it",
+        target_input="greeting",
+    )
+)
+
+if __name__ == "__main__":
+    render_workflow(wf, trigger_id="make_greeting")
+```
+
+```bash
+python hello_workflow.py
+```
+
+### How it fits together
+
+- `HorusContext.boot()` starts the runtime. Call it once, before building or
+  running the workflow.
+- `@FunctionTask.task(wf, inputs=, outputs=, target=)` registers the decorated
+  function as a task on `wf`. Its `id` and `name` default to the function name.
+  The function receives `task` plus one argument per artifact, named by the
+  artifact's `id`.
+- Inside a task, read and write artifacts directly with `artifact.read()` and
+  `artifact.write(...)`.
+- `WorkflowEdge(...)` wires producer to consumer, exactly like YAML `edges`.
+- `render_workflow(wf, trigger_id=...)` runs the workflow with the live TUI. To
+  run without it, use `asyncio.run(wf.run(trigger_id=...))`.
+
+## Prompting the user
+
+A task can ask the user questions through `task.interaction`. Under the live
+dashboard, the display pauses while the prompt is shown and resumes once you
+answer.
+
+<DownloadButton file="interactive_workflow.py" />
+
+```python title="interactive_workflow.py"
+from pathlib import Path
+
+from horus_builtin.artifact.file import FileArtifact
+from horus_builtin.event.tui_subscriber import render_workflow
+from horus_builtin.interaction.common.confirm import ConfirmInteraction
+from horus_builtin.interaction.common.string import StringInteraction
+from horus_builtin.target.local import LocalTarget
+from horus_builtin.task.function import FunctionTask
+from horus_builtin.workflow.horus_workflow import HorusWorkflow
+from horus_runtime.context import HorusContext
+from horus_runtime.core.artifact.base import BaseArtifact
+
+HorusContext.boot()
+
+wf = HorusWorkflow(name="interactive")
+
+work = LocalTarget(working_directory="./horus-work")
+greeting = FileArtifact(id="greeting", path=Path("horus-out/greeting.txt"))
+
+
+@FunctionTask.task(wf, outputs=[greeting], target=work)
+async def greet_user(
+    task: FunctionTask, greeting: FileArtifact
+) -> list[BaseArtifact]:
+    """Ask the user for their name, confirm, then write a greeting."""
+    name = await task.interaction.ask(
+        StringInteraction(
+            value_key="name",
+            prompt="What is your name?",
+            default="World",
+        )
+    )
+
+    shout = await task.interaction.ask(
+        ConfirmInteraction(
+            value_key="shout",
+            prompt="Shout the greeting?",
+            default=False,
+        )
+    )
+
+    message = f"Hello, {name}!"
+    greeting.write(message.upper() if shout else message)
+    return []
+
+
+if __name__ == "__main__":
+    render_workflow(wf, trigger_id="greet_user")
+```
+
+### Built-in interactions
+
+<Tabs>
+  <TabItem value="string" label="Ask for text" default>
+
+```python
+from horus_builtin.interaction.common.string import StringInteraction
+
+answer: str = await task.interaction.ask(
+    StringInteraction(
+        value_key="name",
+        prompt="What is your name?",
+        default="World",     # used when the user enters nothing
+        placeholder="e.g. Ada",
+    )
+)
+```
+
+  </TabItem>
+  <TabItem value="confirm" label="Ask yes or no">
+
+```python
+from horus_builtin.interaction.common.confirm import ConfirmInteraction
+
+ok: bool = await task.interaction.ask(
+    ConfirmInteraction(
+        value_key="proceed",
+        prompt="Continue?",
+        default=True,
+    )
+)
+```
+
+  </TabItem>
+</Tabs>
+
+The answer is validated and coerced to the right type: `str` for
+`StringInteraction`, `bool` for `ConfirmInteraction`. An answer that cannot be
+parsed prompts again. To add your own interaction types, see the
+[Interaction reference](../sdk/core/interaction.md).
+
+Next, [Running workflows](./running-workflows.md) covers the CLI and the live
+dashboard.

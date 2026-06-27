@@ -1,0 +1,48 @@
+---
+sidebar_position: 8
+title: Extending Horus
+---
+
+# Extending Horus
+
+Every building block in a workflow is a plugin. The pieces you have used so far,
+`file` artifacts, the `shell` executor, the `command` runtime, the `local`
+target, and the `string` and `confirm` interactions, are all registered the same
+way your own would be. When the built-ins do not cover your case, you can add a
+new kind without changing the runtime.
+
+Each kind has a base class you subclass and a registry it joins through a Python
+entry point, so once your package is installed Horus discovers it automatically.
+You then refer to it by its `kind` in YAML, or import it directly in Python.
+
+## Extension points
+
+| You want to add | Base class | Reference |
+|-----------------|-----------|-----------|
+| A new artifact type (beyond file, folder, JSON, pickle) | `BaseArtifact` | [Artifacts](../sdk/core/artifact.md) |
+| A new kind of task | `BaseTask` | [Tasks](../sdk/core/task.md) |
+| A new runtime (what runs) | `BaseRuntime` | [Runtimes](../sdk/core/runtime.md) |
+| A new executor (how it runs) | `BaseExecutor` | [Executors](../sdk/core/executor.md) |
+| A new target (where it runs) | `BaseTarget` | [Targets](../sdk/core/target.md) |
+| A new way to move artifacts between targets | `BaseTransferStrategy` | [Transfers](../sdk/core/transfer.md) |
+| A new interaction, or how one is rendered | `BaseInteraction`, `BaseInteractionRenderer` | [Interactions](../sdk/core/interaction.md) |
+| A new workflow type | `BaseWorkflow` | [Workflows](../sdk/core/workflow.md) |
+| Cross-cutting behavior around tasks, runs, or transfers | middleware | [Middleware](../sdk/plugin-system/middleware/overview.md) |
+
+## How registration works
+
+Kinds register through entry points in your package's `pyproject.toml`. For
+example, a custom workflow is exposed like this:
+
+```toml
+[project.entry-points."horus.workflow"]
+my_workflow = "my_package.workflow:MyWorkflow"
+```
+
+The runtime loads these at startup and keys each kind by its discriminator (the
+`kind` field), which is the same string you use in YAML. The
+[auto-registry](../sdk/plugin-system/auto-registry/autoregistry.md) documentation
+explains the mechanism in full.
+
+For the complete API and step-by-step guides, see the
+[Runtime SDK reference](../sdk/overview.md).

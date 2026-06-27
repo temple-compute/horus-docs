@@ -1,0 +1,23 @@
+# hello.yaml: the smallest possible Horus workflow.
+#
+#   horus run hello.yaml
+#
+# One task runs a shell command that writes a greeting to its output artifact.
+# `$message` expands to the on-target path of the artifact whose id is
+# "message"; the command makes the output directory first so the redirect
+# succeeds. Outputs and per-task scratch land under ./horus-out and ./horus-work.
+name: hello
+kind: horus_workflow
+
+tasks:
+  - id: greet
+    name: Greet
+    kind: horus_task
+    target: { kind: local, working_directory: "./horus-work" }
+    runtime:
+      kind: command
+      command: "mkdir -p \"$$(dirname $message)\"\necho 'Hello from Horus!' > $message\n"
+    executor:
+      kind: shell
+    outputs:
+      - { kind: file, id: message, path: "./horus-out/message.txt" }
