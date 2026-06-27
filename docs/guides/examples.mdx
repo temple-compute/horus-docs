@@ -1,0 +1,128 @@
+---
+sidebar_position: 7
+title: Examples
+---
+
+import Tabs from "@theme/Tabs";
+import TabItem from "@theme/TabItem";
+import DownloadButton from "@site/src/components/DownloadButton";
+
+# Examples
+
+Small, runnable workflows you can download and run right away, plus a gallery of
+real-world pipelines.
+
+## Starter examples
+
+Download one, then run it with `horus run <file>.yaml` for YAML or
+`python <file>.py` for Python.
+
+<Tabs>
+  <TabItem value="hello-yaml" label="Hello (YAML)" default>
+
+A single shell task that writes a greeting.
+
+<DownloadButton file="hello.yaml" />
+
+```yaml title="hello.yaml"
+name: hello
+kind: horus_workflow
+
+tasks:
+  - id: greet
+    name: Greet
+    kind: horus_task
+    target: { kind: local, working_directory: "./horus-work" }
+    runtime:
+      kind: command
+      command: "mkdir -p \"$(dirname $message)\"\necho 'Hello from Horus!' > $message\n"
+    executor:
+      kind: shell
+    outputs:
+      - { kind: file, id: message, path: "./horus-out/message.txt" }
+```
+
+```bash
+horus run hello.yaml
+```
+
+  </TabItem>
+  <TabItem value="pipeline-yaml" label="Pipeline (YAML)">
+
+A six-task pipeline (`ingest → validate → two feature stages → train → report`)
+that fans out into parallel branches and merges back. It is a good way to watch
+the dependency graph and progress bar in action.
+
+<DownloadButton file="pipeline.yaml" />
+
+```bash
+horus run pipeline.yaml
+```
+
+The full file is walked through in
+[Writing workflows in YAML](./writing-workflows-yaml.mdx#a-complete-example).
+
+  </TabItem>
+  <TabItem value="hello-py" label="Hello (Python)">
+
+The same idea in Python: two `FunctionTask`s wired by an edge.
+
+<DownloadButton file="hello_workflow.py" />
+
+```bash
+python hello_workflow.py
+```
+
+See [Writing workflows in Python](./writing-workflows-python.mdx) for the full
+listing and explanation.
+
+  </TabItem>
+  <TabItem value="interactive-py" label="Interactive (Python)">
+
+A Python task that prompts the user for input. The live dashboard pauses for the
+prompt, then resumes.
+
+<DownloadButton file="interactive_workflow.py" />
+
+```bash
+python interactive_workflow.py
+```
+
+See [Prompting the user](./writing-workflows-python.mdx#prompting-the-user).
+
+  </TabItem>
+</Tabs>
+
+## Real-world workflows
+
+The [Horus Workflow Repository](https://github.com/templecompute/horus-workflows)
+is a curated, open library of production AI pipelines that send each stage to the
+right kind of compute, for example H100s for training and cheaper GPUs for
+serving.
+
+The featured, end-to-end implementation is W-01, Boltz-2 Virtual Screening: a
+three-stage drug-discovery pipeline (`prep → predict → rank`) that stages inputs
+to a remote GPU box over SSH, runs structure prediction in a container, and ranks
+the hits locally. It is a good template for building your own multi-target Python
+workflow.
+[Browse W-01](https://github.com/templecompute/horus-workflows/tree/main/workflows/drug-discovery/w01-boltz2-virtual-screening).
+
+### Catalog
+
+The remaining entries are detailed architecture blueprints (README specs) you
+can adapt:
+
+| ID | Workflow | Domain |
+|----|----------|--------|
+| [W-01](https://github.com/templecompute/horus-workflows/tree/main/workflows/drug-discovery/w01-boltz2-virtual-screening) | Boltz-2 virtual screening | Drug discovery |
+| [W-02](https://github.com/templecompute/horus-workflows/tree/main/workflows/drug-discovery/w02-de-novo-protein-design) | De novo protein design | Drug discovery |
+| [W-03](https://github.com/templecompute/horus-workflows/tree/main/workflows/drug-discovery/w03-abfe-pipeline) | ABFE binding free energy | Drug discovery |
+| [W-04](https://github.com/templecompute/horus-workflows/tree/main/workflows/genomics/w04-scrna-seq-gpu) | Single-cell RNA-seq (GPU) | Genomics |
+| [W-05](https://github.com/templecompute/horus-workflows/tree/main/workflows/language-models/w05-llm-finetune-deploy) | LLM fine-tune and deploy | Language models |
+| [W-06](https://github.com/templecompute/horus-workflows/tree/main/workflows/language-models/w06-rag-knowledge-base) | RAG knowledge base | Language models |
+| [W-07](https://github.com/templecompute/horus-workflows/tree/main/workflows/language-models/w07-vlm-training-serving) | Vision-language model train and serve | Language models |
+| [W-08](https://github.com/templecompute/horus-workflows/tree/main/workflows/scientific-computing/w08-climate-emulator) | Climate emulator | Scientific computing |
+| [W-09](https://github.com/templecompute/horus-workflows/tree/main/workflows/scientific-computing/w09-materials-discovery) | Materials discovery | Scientific computing |
+| [W-10](https://github.com/templecompute/horus-workflows/tree/main/workflows/medical-imaging/w10-medical-segmentation) | Medical image segmentation | Medical imaging |
+| [W-11](https://github.com/templecompute/horus-workflows/tree/main/workflows/medical-imaging/w11-satellite-imagery) | Satellite imagery foundation model | Geospatial |
+| [W-12](https://github.com/templecompute/horus-workflows/tree/main/workflows/reinforcement-learning/w12-rl-training-policy) | Large-scale RL training | Reinforcement learning |

@@ -1,0 +1,118 @@
+# pipeline.yaml: a multi-task workflow.
+#
+#   horus run pipeline.yaml
+#
+# ingest -> validate -> { text features, image features } -> train -> report
+#
+# It fans out into two parallel feature stages and merges back at training, so
+# the dependency graph is diamond-shaped. The `sleep`s let you watch the live
+# TUI advance. Artifacts are passed between tasks with `$id` substitution (the
+# on-target path), and the `edges` at the bottom declare both the ordering and
+# the artifact routing. `skip_if_complete: false` makes every run actually
+# execute (handy for a demo).
+name: pipeline
+kind: horus_workflow
+
+tasks:
+  - id: ingest
+    name: Ingest data
+    kind: horus_task
+    skip_if_complete: false
+    target: { kind: local, working_directory: "./horus-work" }
+    runtime:
+      kind: command
+      command: "mkdir -p \"$(dirname $raw)\"\nsleep 1\necho 'rows: 1000' > $raw\n"
+    executor:
+      kind: shell
+    outputs:
+      - { kind: file, id: raw, path: "./horus-out/raw.txt" }
+
+  - id: validate
+    name: Validate schema
+    kind: horus_task
+    skip_if_complete: false
+    target: { kind: local, working_directory: "./horus-work" }
+    runtime:
+      kind: command
+      command: "sleep 1\ncat $raw > $valid\necho 'validated: true' >> $valid\n"
+    executor:
+      kind: shell
+    inputs:
+      - { kind: file, id: raw, path: "./horus-out/raw.txt" }
+    outputs:
+      - { kind: file, id: valid, path: "./horus-out/valid.txt" }
+
+  - id: features_text
+    name: Text features
+    kind: horus_task
+    skip_if_complete: false
+    target: { kind: local, working_directory: "./horus-work" }
+    runtime:
+      kind: command
+      command: "sleep 2\ncat $valid > $feat_text\necho 'text_features: 256' >> $feat_text\n"
+    executor:
+      kind: shell
+    inputs:
+      - { kind: file, id: valid, path: "./horus-out/valid.txt" }
+    outputs:
+      - { kind: file, id: feat_text, path: "./horus-out/feat_text.txt" }
+
+  - id: features_image
+    name: Image features
+    kind: horus_task
+    skip_if_complete: false
+    target: { kind: local, working_directory: "./horus-work" }
+    runtime:
+      kind: command
+      command: "sleep 2\ncat $valid > $feat_image\necho 'image_features: 512' >> $feat_image\n"
+    executor:
+      kind: shell
+    inputs:
+      - { kind: file, id: valid, path: "./horus-out/valid.txt" }
+    outputs:
+      - { kind: file, id: feat_image, path: "./horus-out/feat_image.txt" }
+
+  - id: train
+    name: Train model
+    kind: horus_task
+    skip_if_complete: false
+    target: { kind: local, working_directory: "./horus-work" }
+    resources:
+      cpus: 8
+      gpus: 2
+      memory_gb: 32
+      walltime: "01:00:00"
+    runtime:
+      kind: command
+      command: "sleep 3\ncat $feat_text $feat_image > $model\necho 'model: trained' >> $model\n"
+    executor:
+      kind: shell
+    inputs:
+      - { kind: file, id: feat_text, path: "./horus-out/feat_text.txt" }
+      - { kind: file, id: feat_image, path: "./horus-out/feat_image.txt" }
+    outputs:
+      - { kind: file, id: model, path: "./horus-out/model.txt" }
+
+  - id: report
+    name: Write report
+    kind: horus_task
+    skip_if_complete: false
+    target: { kind: local, working_directory: "./horus-work" }
+    runtime:
+      kind: command
+      command: "sleep 1\necho '=== REPORT ===' > $report\ncat $model >> $report\n"
+    executor:
+      kind: shell
+    inputs:
+      - { kind: file, id: model, path: "./horus-out/model.txt" }
+    outputs:
+      - { kind: file, id: report, path: "./horus-out/report.txt" }
+
+# Edges are the sole source of truth for ordering and the dependency DAG.
+edges:
+  - { source: ingest,         source_output: raw,        target: validate,       target_input: raw }
+  - { source: validate,       source_output: valid,      target: features_text,  target_input: valid }
+  - { source: validate,       source_output: valid,      target: features_image, target_input: valid }
+  - { source: features_text,  source_output: feat_text,  target: train,          target_input: feat_text }
+  - { source: features_image, source_output: feat_image, target: train,          target_input: feat_image }
+  - { source: train,          source_output: model,      target: report,         target_input: model }

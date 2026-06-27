@@ -1,0 +1,264 @@
+---
+sidebar_position: 4
+title: Writing workflows (YAML)
+---
+
+import DownloadButton from "@site/src/components/DownloadButton";
+
+# Writing workflows in YAML
+
+YAML is the quickest way to describe a workflow when each task is a command or a
+script. This page is the practical reference for the schema.
+
+## Workflow
+
+```yaml
+name: my_workflow        # required; letters, digits, spaces, _ and -
+kind: horus_workflow     # required; selects the built-in workflow
+tasks: []                # the list of tasks (below)
+edges: []                # dependencies between tasks (below)
+```
+
+## Task
+
+```yaml
+tasks:
+  - id: prep             # required; unique within the workflow
+    name: Prepare data   # required; shown in the dashboard
+    kind: horus_task     # required
+    runtime: { ... }     # required; what to run
+    executor: { ... }    # required; how to run it
+    target: { ... }      # where to run it (defaults to local)
+    inputs:  [ ... ]      # artifacts this task consumes
+    outputs: [ ... ]      # artifacts this task produces
+    resources: { ... }   # optional compute hints
+    skip_if_complete: true   # skip when outputs already exist (default true)
+```
+
+### Runtimes: what to run
+
+| `kind` | Fields | Runs |
+|--------|--------|------|
+| `command` | `command` | a shell command |
+| `python` | `code` | a Python snippet, in-process |
+| `python_script` | `script`, `args`, `python` | a local `.py` file shipped to the target |
+
+```yaml
+runtime:
+  kind: command
+  command: "python train.py --data $dataset --out $model"
+```
+
+### Executors: how to run
+
+| `kind` | Works with | Notes |
+|--------|-----------|-------|
+| `shell` | `command`, `python_script` | runs in a subprocess |
+| `python` | `python` | runs in-process inside the runtime |
+
+### Targets: where to run
+
+| `kind` | Fields | Notes |
+|--------|--------|-------|
+| `local` | `working_directory` | runs on this machine (default) |
+
+```yaml
+target: { kind: local, working_directory: "./horus-work" }
+```
+
+### Artifacts: inputs and outputs
+
+```yaml
+outputs:
+  - { kind: file, id: model, path: "./out/model.pkl" }
+```
+
+| `kind` | Stores |
+|--------|--------|
+| `file` | a plain file |
+| `folder` | a directory |
+| `json` | JSON-serializable data |
+| `pickle` | a pickled Python object |
+
+Each artifact has an `id` (unique within the task's inputs or outputs) and a
+`path`. A task counts as complete when all of its `outputs` exist on disk.
+
+### Resources (optional)
+
+```yaml
+resources:
+  cpus: 8
+  gpus: 2
+  memory_gb: 32
+  vram_gb: 16
+  walltime: "01:30:00"
+```
+
+These are advisory. Resource-aware targets use them; `local` ignores them, but
+the dashboard displays them.
+
+## Referencing artifacts in commands
+
+Inside `command`, `code`, and `args`, use `$`-substitution
+([`string.Template`](https://docs.python.org/3/library/string.html#template-strings)
+syntax) to reference paths:
+
+| Form | Expands to |
+|------|-----------|
+| `$id` or `${id}` | the on-target path of the artifact with that id |
+| `${id.attr}` | an attribute of the artifact, e.g. `${model.path}` |
+| `${task.attr}` | an attribute of the task, e.g. `${task.name}` |
+| `$$` | a literal `$` |
+
+So `cat $raw > $clean` reads the input artifact `raw` and writes the output
+artifact `clean`. Unknown `$names` are left untouched, and shell `$(...)` and
+`{}` pass through unchanged.
+
+## Edges: wiring the DAG
+
+```yaml
+edges:
+  - source: prep            # producer task id ...
+    source_output: data     # ... its output artifact id ...
+    target: train           # ... feeds this consumer task ...
+    target_input: data      # ... as this input artifact id.
+```
+
+Edges are the only thing that orders tasks. The producer's output and the
+consumer's input may use different ids. Each consumer input can be fed by at most
+one edge, and the graph must be acyclic.
+
+:::tip
+A workflow with no edges runs its tasks independently, so only the trigger task
+runs. Add edges to create ordering.
+:::
+
+## A complete example
+
+A multi-stage pipeline: `ingest → validate → { text features, image features }
+→ train → report`. It fans out into two parallel feature stages and merges back
+at training, so the dependency graph is diamond-shaped. The `sleep`s let you
+watch the live dashboard advance, and `skip_if_complete: false` makes every run
+actually execute.
+
+<DownloadButton file="pipeline.yaml" />
+
+```yaml title="pipeline.yaml"
+name: pipeline
+kind: horus_workflow
+
+tasks:
+  - id: ingest
+    name: Ingest data
+    kind: horus_task
+    skip_if_complete: false
+    target: { kind: local, working_directory: "./horus-work" }
+    runtime:
+      kind: command
+      command: "mkdir -p \"$(dirname $raw)\"\nsleep 1\necho 'rows: 1000' > $raw\n"
+    executor:
+      kind: shell
+    outputs:
+      - { kind: file, id: raw, path: "./horus-out/raw.txt" }
+
+  - id: validate
+    name: Validate schema
+    kind: horus_task
+    skip_if_complete: false
+    target: { kind: local, working_directory: "./horus-work" }
+    runtime:
+      kind: command
+      command: "sleep 1\ncat $raw > $valid\necho 'validated: true' >> $valid\n"
+    executor:
+      kind: shell
+    inputs:
+      - { kind: file, id: raw, path: "./horus-out/raw.txt" }
+    outputs:
+      - { kind: file, id: valid, path: "./horus-out/valid.txt" }
+
+  - id: features_text
+    name: Text features
+    kind: horus_task
+    skip_if_complete: false
+    target: { kind: local, working_directory: "./horus-work" }
+    runtime:
+      kind: command
+      command: "sleep 2\ncat $valid > $feat_text\necho 'text_features: 256' >> $feat_text\n"
+    executor:
+      kind: shell
+    inputs:
+      - { kind: file, id: valid, path: "./horus-out/valid.txt" }
+    outputs:
+      - { kind: file, id: feat_text, path: "./horus-out/feat_text.txt" }
+
+  - id: features_image
+    name: Image features
+    kind: horus_task
+    skip_if_complete: false
+    target: { kind: local, working_directory: "./horus-work" }
+    runtime:
+      kind: command
+      command: "sleep 2\ncat $valid > $feat_image\necho 'image_features: 512' >> $feat_image\n"
+    executor:
+      kind: shell
+    inputs:
+      - { kind: file, id: valid, path: "./horus-out/valid.txt" }
+    outputs:
+      - { kind: file, id: feat_image, path: "./horus-out/feat_image.txt" }
+
+  - id: train
+    name: Train model
+    kind: horus_task
+    skip_if_complete: false
+    target: { kind: local, working_directory: "./horus-work" }
+    resources:
+      cpus: 8
+      gpus: 2
+      memory_gb: 32
+      walltime: "01:00:00"
+    runtime:
+      kind: command
+      command: "sleep 3\ncat $feat_text $feat_image > $model\necho 'model: trained' >> $model\n"
+    executor:
+      kind: shell
+    inputs:
+      - { kind: file, id: feat_text, path: "./horus-out/feat_text.txt" }
+      - { kind: file, id: feat_image, path: "./horus-out/feat_image.txt" }
+    outputs:
+      - { kind: file, id: model, path: "./horus-out/model.txt" }
+
+  - id: report
+    name: Write report
+    kind: horus_task
+    skip_if_complete: false
+    target: { kind: local, working_directory: "./horus-work" }
+    runtime:
+      kind: command
+      command: "sleep 1\necho '=== REPORT ===' > $report\ncat $model >> $report\n"
+    executor:
+      kind: shell
+    inputs:
+      - { kind: file, id: model, path: "./horus-out/model.txt" }
+    outputs:
+      - { kind: file, id: report, path: "./horus-out/report.txt" }
+
+edges:
+  - { source: ingest,         source_output: raw,        target: validate,       target_input: raw }
+  - { source: validate,       source_output: valid,      target: features_text,  target_input: valid }
+  - { source: validate,       source_output: valid,      target: features_image, target_input: valid }
+  - { source: features_text,  source_output: feat_text,  target: train,          target_input: feat_text }
+  - { source: features_image, source_output: feat_image, target: train,          target_input: feat_image }
+  - { source: train,          source_output: model,      target: report,         target_input: model }
+```
+
+Run it:
+
+```bash
+horus run pipeline.yaml
+```
+
+If a task needs real Python logic or has to prompt the user, see
+[Writing workflows in Python](./writing-workflows-python.mdx).
+
+The runtime, executor, target, and artifact kinds above are plugins. You can add
+your own when the built-ins are not enough; see [Extending Horus](./extending.md).
