@@ -105,7 +105,7 @@ const config: Config = {
         //   position: "right",
         // },
         {
-          href: "https://github.com/templecompute/horus-runtime",
+          href: "https://github.com/temple-compute/horus-runtime",
           label: "GitHub",
           position: "right",
         },
@@ -119,7 +119,7 @@ const config: Config = {
           items: [
             {
               label: "GitHub",
-              href: "https://github.com/templecompute/horus-runtime",
+              href: "https://github.com/temple-compute/horus-runtime",
             },
           ],
         },
