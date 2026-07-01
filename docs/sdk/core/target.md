@@ -174,14 +174,15 @@ class BaseTarget(AutoRegistry, entry_point="target"):
   run and drive `task.run()` on the orchestrator — override only for a
   fundamentally different dispatch model
 - `run_command` / `put_file` / `get_file` / `mkdir` / `list_dir`: the agentless
-  channel. `run_command` is a template method — implement the detach primitives
-  (`_launch` / `_poll` / `_read_output` / `_send_signal` / `_run_command_sync`)
-  rather than overriding it; see [Detachable Execution](./detaching.md).
-  `list_dir` enumerates a target-side directory (used to collect side artifacts
-  back to the orchestrator — see [Side Artifacts](./side-artifact.md))
+  channel. `run_command` is a template method; a target implements the detach
+  primitives (`_launch` / `_poll` / `_read_output` / `_send_signal` /
+  `_run_command_sync`) instead of overriding it. See
+  [Detachable Execution](./detaching.md). `list_dir` enumerates a target-side
+  directory, used to collect side artifacts back to the orchestrator (see
+  [Side Artifacts](./side-artifact.md))
 - `access_cost()`: estimate the cost of reading an artifact from this target
-- `recover(task)`: optionally reconnect to a previously dispatched task after an
-  orchestrator restart (built on the same detach primitives)
+- `recover(task)`: reconnect to a running job after the orchestrator process
+  restarts, using the same detach primitives
 
 `location_id` feeds the transfer system: two targets with the same
 `location_id` share a filesystem, so the workflow can skip artifact copies
@@ -210,9 +211,9 @@ file artifacts that already exist. Its channel implements `run_command` with
 leads its own process group; `ChannelProcess.kill()` then signals the whole
 group (`os.killpg`), so a command that spawns children leaves no orphans.
 `put_file` / `get_file` / `mkdir` map the remote paths to local paths, and
-`list_dir` walks them with `pathlib`. It also implements the detach primitives,
-but keeps the synchronous path as its default (`detach_by_default = False`) —
-there is no channel to drop locally. See
+`list_dir` walks them with `pathlib`. It implements the detach primitives and
+keeps the synchronous path as its default (`detach_by_default = False`), since
+execution shares the orchestrator's machine. See
 [Detachable Execution](./detaching.md).
 
 ## Remote Targets
@@ -223,9 +224,9 @@ commands and moves files over a single persistent `asyncssh` connection
 (`create_process` + SFTP) and **requires nothing on the remote host but the
 binaries the command uses**. It implements `list_dir` over SFTP (no shell), so
 side-artifact collection works the same as locally. It inherits the dispatch
-lifecycle from `BaseTarget` unchanged, and **detaches by default**
-(`detach_by_default = True`): commands are launched `nohup`'d so they survive a
-dropped SSH channel — see [Detachable Execution](./detaching.md).
+lifecycle from `BaseTarget`. It detaches by default (`detach_by_default =
+True`): commands run in their own session so they survive a dropped SSH
+channel. See [Detachable Execution](./detaching.md).
 
 ## Example
 
