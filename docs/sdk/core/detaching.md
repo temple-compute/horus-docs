@@ -87,13 +87,21 @@ async def _send_signal(self, handle, sig) -> None
 
 ```text
 mkdir -p <job_dir> || exit 1;
-nohup sh -c '( <cmd> ); echo $? > <job_dir>/exit_code' \
+setsid sh -c '( <cmd> ); echo $? > <job_dir>/exit_code' \
     > <job_dir>/stdout.log 2> <job_dir>/stderr.log < /dev/null &
 echo $! > <job_dir>/pid
 ```
 
-- `nohup` + redirected output + closed stdin make the job ignore `SIGHUP` when
-  the channel closes.
+- **`setsid` puts the job in its own session and process group** (so its PID
+  equals its PGID). That drops the controlling tty — so the job ignores
+  `SIGHUP` when the channel closes — and, crucially, lets a signal reach the
+  **whole process tree** via `kill -- -<pid>`, so cancelling a job also stops
+  the children it spawned. Where `setsid` is unavailable (e.g. macOS, used by
+  `LocalTarget`) the launcher falls back to `nohup` and the target signals the
+  group via `os.getpgid` at kill time (`build_detach_command(..., session_leader=...)`
+  selects between them).
+- The command runs in a subshell `( … )` so a top-level `exit` in it can't skip
+  the exit-code write.
 - The **`exit_code` file is the authoritative "done" signal** — observable
   even after the launching channel is long gone. A liveness check
   (`kill -0 <pid>`) is only a fast-path hint, so a reused PID after the job
@@ -115,8 +123,10 @@ channel open:
 - `stream()` re-reads the captured logs on each tick and yields the new lines —
   live-ish, with up to `poll_interval` latency, which is the price of channel
   independence.
-- `kill()` / `signal()` schedule `_send_signal` (delivery may need a round
-  trip); callers confirm the effect by continuing to poll.
+- `kill()` / `signal()` schedule `_send_signal`, which targets the job's
+  **process group** (not just the launcher pid) so a cancel stops the command
+  and everything it spawned; delivery may need a round trip, so callers confirm
+  the effect by continuing to poll.
 
 Because every method re-probes on demand, a dropped connection just pauses
 polling — the next reconnect resumes it, and the job never noticed.
