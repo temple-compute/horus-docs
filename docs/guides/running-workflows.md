@@ -40,7 +40,7 @@ For workflows defined in Python, run them with `render_workflow` for the live
 dashboard, or `asyncio.run(wf.run(...))` without it:
 
 ```python
-from horus_builtin.event.tui_subscriber import render_workflow
+from horus_builtin import render_workflow
 
 render_workflow(wf, trigger_id="make_greeting")
 ```
