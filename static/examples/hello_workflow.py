@@ -12,7 +12,7 @@ library, or prompting the user (see interactive_workflow.py).
 from pathlib import Path
 
 from horus_builtin.artifact.file import FileArtifact
-from horus_builtin.event.tui_subscriber import render_workflow
+from horus_builtin import render_workflow
 from horus_builtin.target.local import LocalTarget
 from horus_builtin.task.function import FunctionTask
 from horus_builtin.workflow.horus_workflow import HorusWorkflow

@@ -10,7 +10,7 @@ resumes once you answer. YAML workflows cannot do this; it needs real Python.
 from pathlib import Path
 
 from horus_builtin.artifact.file import FileArtifact
-from horus_builtin.event.tui_subscriber import render_workflow
+from horus_builtin import render_workflow
 from horus_builtin.interaction.common.confirm import ConfirmInteraction
 from horus_builtin.interaction.common.string import StringInteraction
 from horus_builtin.target.local import LocalTarget
