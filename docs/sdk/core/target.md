@@ -62,12 +62,18 @@ It never assumes Horus is installed on the other side, only the binaries the
 command itself names (a shell, `docker`, `sbatch`, …).
 
 ```python
-async def run_command(self, cmd, *, cwd=None, env=None) -> ChannelProcess
+async def run_command(self, cmd, *, cwd=None, env=None, detach=None) -> ChannelProcess
 async def put_file(self, content, remote_path) -> None   # bytes | local Path
 async def get_file(self, remote_path) -> bytes
 async def mkdir(self, path) -> None                      # mkdir -p semantics
 async def list_dir(self, path) -> list[RemoteDirEntry]   # non-recursive listing
 ```
+
+`run_command` is a **template method**: it either runs synchronously or
+launches the command **detached** (so it survives a dropped channel), driven by
+a few small target primitives rather than a per-target implementation. Concrete
+targets implement those primitives instead of overriding `run_command`. See
+[Detachable Execution](./detaching.md).
 
 `list_dir` returns the immediate children of a target-side directory as
 `RemoteDirEntry` tuples — everything a caller needs to walk and fetch a tree
@@ -135,11 +141,19 @@ class BaseTarget(AutoRegistry, entry_point="target"):
     async def wait(self) -> None: ...
     async def cancel(self) -> None: ...
     async def get_status(self) -> TaskStatus: ...
-    async def recover(self) -> bool: return False
+    async def recover(self, task) -> bool: return False    # reattach after restart
+
+    # --- agentless channel: run_command is a template method ---
+    async def run_command(self, cmd, *, cwd=None, env=None, detach=None) -> ChannelProcess: ...
+
+    # implement these instead of overriding run_command (detach support)
+    async def _run_command_sync(self, cmd, *, cwd, env) -> ChannelProcess: ...
+    async def _launch(self, cmd, *, cwd, env, job_dir) -> JobHandle: ...
+    async def _poll(self, handle) -> int | None: ...
+    async def _read_output(self, handle) -> tuple[bytes, bytes]: ...
+    async def _send_signal(self, handle, sig) -> None: ...
 
     # --- agentless channel (implement) ---
-    @abstractmethod
-    async def run_command(self, cmd, *, cwd=None, env=None) -> ChannelProcess: ...
     @abstractmethod
     async def put_file(self, content, remote_path) -> None: ...
     @abstractmethod
@@ -160,10 +174,14 @@ class BaseTarget(AutoRegistry, entry_point="target"):
   run and drive `task.run()` on the orchestrator — override only for a
   fundamentally different dispatch model
 - `run_command` / `put_file` / `get_file` / `mkdir` / `list_dir`: the agentless
-  channel. `list_dir` enumerates a target-side directory (used to collect side
-  artifacts back to the orchestrator — see [Side Artifacts](./side-artifact.md))
+  channel. `run_command` is a template method — implement the detach primitives
+  (`_launch` / `_poll` / `_read_output` / `_send_signal` / `_run_command_sync`)
+  rather than overriding it; see [Detachable Execution](./detaching.md).
+  `list_dir` enumerates a target-side directory (used to collect side artifacts
+  back to the orchestrator — see [Side Artifacts](./side-artifact.md))
 - `access_cost()`: estimate the cost of reading an artifact from this target
-- `recover()`: optionally reconnect to a previously dispatched task
+- `recover(task)`: optionally reconnect to a previously dispatched task after an
+  orchestrator restart (built on the same detach primitives)
 
 `location_id` feeds the transfer system: two targets with the same
 `location_id` share a filesystem, so the workflow can skip artifact copies
@@ -192,7 +210,10 @@ file artifacts that already exist. Its channel implements `run_command` with
 leads its own process group; `ChannelProcess.kill()` then signals the whole
 group (`os.killpg`), so a command that spawns children leaves no orphans.
 `put_file` / `get_file` / `mkdir` map the remote paths to local paths, and
-`list_dir` walks them with `pathlib`.
+`list_dir` walks them with `pathlib`. It also implements the detach primitives,
+but keeps the synchronous path as its default (`detach_by_default = False`) —
+there is no channel to drop locally. See
+[Detachable Execution](./detaching.md).
 
 ## Remote Targets
 
@@ -202,7 +223,9 @@ commands and moves files over a single persistent `asyncssh` connection
 (`create_process` + SFTP) and **requires nothing on the remote host but the
 binaries the command uses**. It implements `list_dir` over SFTP (no shell), so
 side-artifact collection works the same as locally. It inherits the dispatch
-lifecycle from `BaseTarget` unchanged.
+lifecycle from `BaseTarget` unchanged, and **detaches by default**
+(`detach_by_default = True`): commands are launched `nohup`'d so they survive a
+dropped SSH channel — see [Detachable Execution](./detaching.md).
 
 ## Example
 
