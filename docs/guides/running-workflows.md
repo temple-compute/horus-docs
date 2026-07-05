@@ -20,6 +20,9 @@ showing a live dashboard. It exits non-zero if a task fails.
 |--------|---------|--------------|
 | `--trigger TASK_ID` | first task in the file | Start from a specific task. The run includes that task, its upstream dependencies, and its downstream consumers. |
 | `--no-tui` | off | Turn off the live dashboard and stream plain log output instead. Useful for CI, logs, or piping. |
+| `--no-skip TASK_ID` | none | Force a specific task to run even if it is already complete. Repeat the option to force multiple tasks. |
+| `--no-skip-all` | off | Force every task to run, ignoring completion status. |
+
 
 ```bash
 # Run only the part of the graph around "train"
@@ -27,11 +30,30 @@ horus run pipeline.yaml --trigger train
 
 # Plain log output, no dashboard
 horus run pipeline.yaml --no-tui
+
+# Re-run just the preprocessing step
+horus run pipeline.yaml --no-skip preprocess
+
+# Re-run multiple tasks
+horus run pipeline.yaml \
+  --no-skip preprocess \
+  --no-skip train
+
+# Force every task to run
+horus run pipeline.yaml --no-skip-all
 ```
 
 :::tip Re-running skips finished work
-A task whose output artifacts already exist is skipped on the next run. Set
-`skip_if_complete: false` on a task to always run it.
+By default, Horus skips any task whose output artifacts already exist.
+
+You can control this behavior in two ways:
+
+- Set `skip_if_complete: false` on a task to always execute it.
+- Override the behavior from the command line:
+  - `--no-skip TASK_ID` forces one or more specific tasks to run.
+  - `--no-skip-all` forces every task to run.
+
+If `--no-skip` is given an unknown task ID, Horus reports the valid task IDs and exits with an error.
 :::
 
 ## From Python
