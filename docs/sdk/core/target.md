@@ -162,7 +162,33 @@ class BaseTarget(AutoRegistry, entry_point="target"):
     async def mkdir(self, path) -> None: ...
     @abstractmethod
     async def list_dir(self, path) -> list[RemoteDirEntry]: ...
+
+    # --- filesystem primitives (POSIX-shell defaults; override natively) ---
+    async def path_exists(self, path) -> bool: ...          # test -e <path>
+    async def remove(self, path) -> None: ...               # rm -rf <path>
 ```
+
+### Filesystem primitives
+
+Alongside the channel, `BaseTarget` exposes two small filesystem primitives that
+answer *does this path exist* and *remove this path* **on the target host**:
+
+```python
+async def path_exists(self, path: str) -> bool
+async def remove(self, path: str) -> None
+```
+
+The base class provides POSIX-shell defaults (`test -e` and `rm -rf` run over
+the channel), so remote targets work out of the box; `LocalTarget` overrides
+them with native `pathlib` calls, and any target that can answer more directly
+(SFTP, an agent API) should override them too.
+
+Together with `run_command_sync`, `put_file`, `get_file`, `path_on_target`, and
+`resolved_working_directory`, these primitives are exactly what the
+[`ArtifactStore`](./artifact.md#artifactstore) and the target-agnostic
+[`GenericTransfer`](./transfer.md#generictransfer) build on to check, delete, and
+move artifacts wherever they physically live — no target-specific artifact logic
+required.
 
 ### Contract
 

@@ -16,18 +16,18 @@ Every task must implement all three abstract methods:
 async def _run(self) -> None:
     ...
 
-def is_complete(self) -> bool:
+async def is_complete(self) -> bool:
     ...
 
-def _reset(self) -> None:
+async def _reset(self) -> None:
     ...
 ```
 
 ### Contract
 
 - `_run()`: task-specific execution logic; do not mutate `status` here
-- `is_complete()`: return `True` when all output artifacts are present and valid; used to skip already-complete tasks when `skip_if_complete=True`
-- `_reset()`: clear any subclass-specific state so the task can re-run; do not mutate `status` here
+- `is_complete()`: **async** — return `True` when all output artifacts are present and valid; used to skip already-complete tasks when `skip_if_complete=True`. It is `async` because checking an output artifact may require a round-trip to a remote target (see [`ArtifactStore`](./artifact.md#artifactstore)); callers must `await` it.
+- `_reset()`: **async** — clear any subclass-specific state so the task can re-run; do not mutate `status` here. `reset()` / `_reset()` are `async`; callers must `await`.
 - `run()` is the public `final` entry point and runs `TaskMiddleware`
 - `kind: str` is the registry discriminator
 - `executor` and `runtime` must be compatible
@@ -85,16 +85,16 @@ class BaseTask(AutoRegistry, entry_point="task"):
         """Task-specific execution logic. Do not set self.status here."""
 
     @abstractmethod
-    def is_complete(self) -> bool:
+    async def is_complete(self) -> bool:
         """Return True when output artifacts are present and valid."""
 
     @final
-    def reset(self) -> None:
+    async def reset(self) -> None:
         """Reset status to IDLE and delegate to _reset()."""
         ...
 
     @abstractmethod
-    def _reset(self) -> None:
+    async def _reset(self) -> None:
         """Subclass-specific reset logic. Do not set self.status here."""
 ```
 

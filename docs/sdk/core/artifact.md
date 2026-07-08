@@ -15,8 +15,9 @@ An _artifact_ represents a concrete unit of data produced or consumed by a task.
 logically represents (a Python dict, a trained model, a dataset) the runtime always
 materializes it on disk as either a file or a directory. This is a fundamental
 invariant: the `path` field is not optional metadata, it is the canonical identity of
-the artifact. Existence means the path exists; integrity means the content hash
-matches.
+the artifact: existence means the path exists on the target where the artifact
+lives (checked through the [`ArtifactStore`](#artifactstore), not by the artifact
+itself).
 
 This constraint makes artifacts deterministic, cacheable, and transportable across
 machines without any special serialization protocol at the workflow level.
@@ -40,10 +41,16 @@ Each artifact:
   [edges](./workflow.md#edges)).
 - Has a **path** identifying its location on disk
 - Defines:
-  - How to **check existence**
   - How to **read** its contents back into a Python object
   - How to **write** a Python object to its file representation
-  - How to **compute a content hash** (determines if the artifact changed)
+  - How to **package / unpackage** itself for transport, as portable shell
+    commands (see `pack_command` / `unpack_command` below)
+
+Filesystem lifecycle operations (existence checks, deletion, packaging) are
+**not** performed by the artifact itself. They run through the
+[`ArtifactStore`](#artifactstore) against the target where the artifact
+physically lives, so they behave identically whether that is the orchestrator
+or a remote machine.
 
 ## Defining Custom Artifacts
 
@@ -75,18 +82,62 @@ class MyArtifact(BaseArtifact[str]):
 - **Path normalization**: Accepts both `str` and `Path` for `path`, always resolved to an absolute `Path`.
 - **ID logic**: Each artifact has a unique `internal_id` (UUID) and a user-friendly `id` (auto-set if not provided).
 - **Event emission**: Emits lifecycle events via the runtime event bus.
-- **Hashing**: Provides a `hash` property (SHA-256 of file contents) and a static `hash_file(path)` method.
 - **Required implementations**:
-  - `read() -> T`: Read and deserialize the artifact contents.
-  - `write(value: T) -> None`: Write the native representation to disk.
+  - `read() -> T`: Read and deserialize the artifact contents. Runs task-local,
+    on the machine where the value is produced or consumed.
+  - `write(value: T) -> None`: Write the native representation to disk (also
+    task-local).
   - `kind: str`: Concrete discriminator value used for registry dispatch and type resolution.
 - **Kind metadata** (optional ClassVars):
   - `kind_name: ClassVar[str]`: short, human-readable name for the kind (e.g. `"File"`), used by client UIs, registries, and logging.
   - `kind_description: ClassVar[str]`: a longer description of the kind. Defaults to an empty string. For translatable text, prefer a plugin-scoped translator (see the [SDK i18n guide](../i18n/index.md)).
-- **Provided implementations**:
-  - `exists() -> bool`: Returns whether the path exists on disk.
-  - `delete()`: Removes the file and emits a delete event.
-  - `package() / unpackage()`: Artifact transport helpers.
+- **Transport hooks** (override only when the artifact is not a single file):
+  - `pack_command(src, pkg) -> str | None`: return a portable shell command that
+    produces the single-file package `pkg` from the artifact materialized at
+    `src`, or `None` when the artifact is already a single file (identity
+    packaging — the base default).
+  - `unpack_command(pkg, dest) -> str | None`: return a portable shell command
+    that materializes the artifact at `dest` from the package `pkg`, or `None`
+    for identity (the store simply moves the file into place).
+
+  Both commands are executed on the target where the artifact lives (or is being
+  materialized) by the [`ArtifactStore`](#artifactstore), so they must be
+  POSIX-portable and reference only the given target-side paths. `FileArtifact`
+  and other single-file artifacts inherit the identity defaults;
+  `FolderArtifact` overrides them with `tar` commands.
+
+## `ArtifactStore`
+
+An artifact is just a file-backed value description; **where** it lives, and how
+to check, delete, or transport it there, is owned by a target. The
+`ArtifactStore` (`horus_runtime.core.artifact.store`) is the mediator that binds
+an artifact to a target and performs its lifecycle operations through that
+target's filesystem primitives:
+
+```python
+from horus_runtime.core.artifact.store import ArtifactStore
+
+store = ArtifactStore(target)
+
+await store.exists(artifact)                 # -> bool
+await store.delete(artifact)                 # remove + emit delete event
+package_path = await store.package(artifact) # build a single transferable file
+await store.unpackage(artifact, package_path)
+```
+
+Because every operation runs through the target rather than local `pathlib`
+calls, the *same* code checks and moves an artifact whether it physically lives
+on the orchestrator or on a remote (e.g. SSH) machine. `package()` runs the
+artifact's `pack_command` on the target and returns the package path (or the
+artifact's own path unchanged for single-file, identity artifacts);
+`unpackage()` runs `unpack_command` on the destination, or simply moves the file
+into place for identity artifacts.
+
+`ArtifactStore` depends only on a small `TargetFilesystem` Protocol
+(`path_on_target`, `path_exists`, `remove`, `run_command_sync`,
+`resolved_working_directory`) that `BaseTarget` satisfies structurally, so it
+stays decoupled from any concrete target type. See
+[Target](./target.md#filesystem-primitives) for those primitives.
 
 ## Built-in Artifacts
 
@@ -102,7 +153,10 @@ from horus_builtin.artifact.file import FileArtifact
 
 ### `FolderArtifact`
 
-Represents a local directory. Existence is checked via `path.is_dir()`.
+Represents a directory. It overrides the transport hooks so a whole directory
+can move between targets as a single file: `pack_command` archives the folder's
+contents with `tar czf … -C <src> .` and `unpack_command` extracts them with
+`tar xzf` into a freshly recreated destination.
 
 ```python
 from horus_builtin.artifact.folder import FolderArtifact

@@ -23,7 +23,9 @@ targets focused on dispatch and workflow code focused on orchestration.
 Before dispatching each task the workflow calls `transfer_artifacts()`, which:
 
 1. determines the source target for each input artifact
-2. looks up the registered strategy for the `(source, destination)` target pair
+2. looks up the registered strategy for the `(source, destination)` target pair,
+   falling back to the target-agnostic [`GenericTransfer`](#generictransfer) when
+   none is registered
 3. calls `strategy.transfer(artifact, source, destination)`
 
 ## Base Transfer Strategy
@@ -90,14 +92,17 @@ definition time.
 
 ## Lookup
 
-The workflow resolves a strategy at runtime using `get_from_registry()`:
+The workflow resolves a strategy at runtime using `get_from_registry()`. A
+registered strategy for the exact `(source, destination)` pair always wins; when
+none is found, the workflow falls back to [`GenericTransfer`](#generictransfer)
+rather than failing:
 
 ```python
-strategy_cls = BaseTransferStrategy.get_from_registry(source_target, task.target)
-if strategy_cls is None:
-    raise TransferStrategyNotFoundError(source_target.kind, task.target.kind)
+strategy = BaseTransferStrategy.get_from_registry(source_target, task.target)
+if strategy is None:
+    strategy = GenericTransfer()  # target-agnostic fallback
 
-await strategy_cls().transfer(artifact, source_target, task.target)
+await strategy.transfer(artifact, source_target, task.target)
 ```
 
 ## Built-in Strategies
@@ -121,6 +126,33 @@ class LocalNoOpTransfer(BaseTransferStrategy):
     async def _transfer(self, artifact, source, destination) -> None:
         pass
 ```
+
+### `GenericTransfer`
+
+`GenericTransfer` (`horus_runtime.core.transfer.generic`) is the **target-agnostic
+fallback**. It moves an artifact between *any* two targets using only the shared
+filesystem primitives every target implements, so a new target kind can transfer
+artifacts to and from anywhere without anyone writing a location-specific
+strategy for it.
+
+Its `_transfer()`:
+
+1. **short-circuits** when both targets report the same `location_id` (they share
+   a filesystem, so nothing is copied — the artifact path is just repointed);
+2. otherwise **packages** the artifact on the source (via
+   [`ArtifactStore`](./artifact.md#artifactstore)), streams the single package
+   file through the orchestrator with `get_file` → `put_file`, and **unpackages**
+   it on the destination:
+
+   ```text
+   package → get_file → put_file → unpackage
+   ```
+
+`GenericTransfer` is not registered by key (`add_to_registry = False`); the
+workflow uses it directly only when no specific strategy is found. Registered
+strategies (like `LocalNoOpTransfer` or a plugin's SSH transfer) therefore always
+take precedence, so you only write a custom strategy when you need transport that
+is faster or smarter than the generic package-and-stream path.
 
 ## Exceptions
 
