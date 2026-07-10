@@ -122,9 +122,7 @@ class BaseTarget(AutoRegistry, entry_point="target"):
     kind: str
     kind_name: ClassVar[str] = "Target"
     kind_description: ClassVar[str] = _("Base target")
-    working_directory: str = Field(
-        default_factory=lambda: str(Path.cwd())
-    )
+    working_directory: str | None = None
 
     # --- placement identity (implement) ---
     @property
@@ -133,6 +131,12 @@ class BaseTarget(AutoRegistry, entry_point="target"):
 
     @abstractmethod
     def access_cost(self, artifact: BaseArtifact) -> float | None: ...
+
+    # --- base working directory, resolved at use time ---
+    @property
+    def resolved_working_directory(self) -> str: ...
+    # raises WorkingDirectoryNotSetError when working_directory is None;
+    # override to derive a default (LocalTarget falls back to the cwd)
 
     # --- dispatch lifecycle (concrete defaults; override only if needed) ---
     @final
@@ -193,7 +197,16 @@ required.
 ### Contract
 
 - `location_id`: stable URI-like identifier for the physical location
-- `working_directory`: base directory **on the target host** where per-task working directories are created
+- `working_directory`: base directory **on the target host** where per-task
+  working directories are created. It is `str | None` and defaults to `None`;
+  read it through `resolved_working_directory`, never directly
+- `resolved_working_directory`: the base directory as a concrete path, resolved
+  at use time. The base contract **raises `WorkingDirectoryNotSetError`** when
+  `working_directory` is `None`; a target that can derive a sensible default
+  overrides this property (`LocalTarget` falls back to the process cwd). The
+  workflow fills `working_directory` in for targets co-located with the
+  orchestrator, so a target on a *different* machine (e.g. an SSH host) must be
+  given one explicitly
 - `dispatch()`: public `@final` entry point. Sets `task.status = PENDING`, runs
   `TargetMiddleware`, and delegates to `_dispatch()`
 - `_dispatch()` / `wait()` / `cancel()` / `get_status()`: concrete defaults that
@@ -253,6 +266,11 @@ side-artifact collection works the same as locally. It inherits the dispatch
 lifecycle from `BaseTarget`. It detaches by default (`detach_by_default =
 True`): commands run in their own session so they survive a dropped SSH
 channel. See [Detachable Execution](./detaching.md).
+
+Because an SSH host is a different machine than the orchestrator, an `SSHTarget`
+must be given an explicit `working_directory` — the orchestrator only propagates
+one to co-located targets, so without it `resolved_working_directory` raises
+`WorkingDirectoryNotSetError`.
 
 ## Example
 
