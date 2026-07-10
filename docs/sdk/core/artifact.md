@@ -133,10 +133,9 @@ artifact's own path unchanged for single-file, identity artifacts);
 `unpackage()` runs `unpack_command` on the destination, or simply moves the file
 into place for identity artifacts.
 
-`ArtifactStore` depends only on a small `TargetFilesystem` Protocol
+`ArtifactStore` depends only on a small set of methods
 (`path_on_target`, `path_exists`, `remove`, `run_command_sync`,
-`resolved_working_directory`) that `BaseTarget` satisfies structurally, so it
-stays decoupled from any concrete target type. See
+`resolved_working_directory`) that `BaseTarget` satisfies. See
 [Target](./target.md#filesystem-primitives) for those primitives.
 
 ## Built-in Artifacts
