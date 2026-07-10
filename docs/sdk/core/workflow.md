@@ -33,7 +33,7 @@ def from_yaml(cls, path: str | Path) -> Self:
 async def _run(self, trigger_id: str) -> None:
     ...
 
-def _reset(self) -> None:
+async def _reset(self) -> None:
     ...
 ```
 
@@ -41,7 +41,7 @@ def _reset(self) -> None:
 
 - `from_yaml()`: load and construct a workflow from a YAML file
 - `_run(trigger_id)`: workflow-specific execution logic; do not mutate `status` here
-- `_reset()`: subclass-specific reset logic; do not mutate `status` here
+- `_reset()`: **async**: subclass-specific reset logic; do not mutate `status` here. `reset()` / `_reset()` are `async`; callers must `await`.
 - `run(trigger_id)` is the public `final` entry point and runs `WorkflowMiddleware`
 - `kind: str` is the registry discriminator
 
@@ -85,12 +85,12 @@ class BaseWorkflow(AutoRegistry, entry_point="workflow"):
         """Workflow-specific execution logic. Do not set self.status here."""
 
     @final
-    def reset(self) -> None:
+    async def reset(self) -> None:
         """Reset status to IDLE and delegate to _reset()."""
         ...
 
     @abstractmethod
-    def _reset(self) -> None:
+    async def _reset(self) -> None:
         """Subclass-specific reset logic. Do not set self.status here."""
 ```
 
