@@ -187,7 +187,7 @@ Together with `run_command_sync`, `put_file`, `get_file`, `path_on_target`, and
 `resolved_working_directory`, these primitives are exactly what the
 [`ArtifactStore`](./artifact.md#artifactstore) and the target-agnostic
 [`GenericTransfer`](./transfer.md#generictransfer) build on to check, delete, and
-move artifacts wherever they physically live — no target-specific artifact logic
+move artifacts wherever they physically live, no target-specific artifact logic
 required.
 
 ### Contract

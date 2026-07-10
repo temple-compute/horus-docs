@@ -138,7 +138,7 @@ strategy for it.
 Its `_transfer()`:
 
 1. **short-circuits** when both targets report the same `location_id` (they share
-   a filesystem, so nothing is copied — the artifact path is just repointed);
+   a filesystem, so nothing is copied, the artifact path is just repointed);
 2. otherwise **packages** the artifact on the source (via
    [`ArtifactStore`](./artifact.md#artifactstore)), streams the single package
    file through the orchestrator with `get_file` → `put_file`, and **unpackages**

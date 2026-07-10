@@ -26,8 +26,8 @@ async def _reset(self) -> None:
 ### Contract
 
 - `_run()`: task-specific execution logic; do not mutate `status` here
-- `is_complete()`: **async** — return `True` when all output artifacts are present and valid; used to skip already-complete tasks when `skip_if_complete=True`. It is `async` because checking an output artifact may require a round-trip to a remote target (see [`ArtifactStore`](./artifact.md#artifactstore)); callers must `await` it.
-- `_reset()`: **async** — clear any subclass-specific state so the task can re-run; do not mutate `status` here. `reset()` / `_reset()` are `async`; callers must `await`.
+- `is_complete()`: **async**: return `True` when all output artifacts are present and valid; used to skip already-complete tasks when `skip_if_complete=True`. It is `async` because checking an output artifact may require a round-trip to a remote target (see [`ArtifactStore`](./artifact.md#artifactstore)); callers must `await` it.
+- `_reset()`: **async**: clear any subclass-specific state so the task can re-run; do not mutate `status` here. `reset()` / `_reset()` are `async`; callers must `await`.
 - `run()` is the public `final` entry point and runs `TaskMiddleware`
 - `kind: str` is the registry discriminator
 - `executor` and `runtime` must be compatible

@@ -41,7 +41,7 @@ async def _reset(self) -> None:
 
 - `from_yaml()`: load and construct a workflow from a YAML file
 - `_run(trigger_id)`: workflow-specific execution logic; do not mutate `status` here
-- `_reset()`: **async** — subclass-specific reset logic; do not mutate `status` here. `reset()` / `_reset()` are `async`; callers must `await`.
+- `_reset()`: **async**: subclass-specific reset logic; do not mutate `status` here. `reset()` / `_reset()` are `async`; callers must `await`.
 - `run(trigger_id)` is the public `final` entry point and runs `WorkflowMiddleware`
 - `kind: str` is the registry discriminator
 
