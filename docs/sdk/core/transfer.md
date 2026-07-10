@@ -73,6 +73,17 @@ class BaseTransferStrategy[S: BaseTarget, D: BaseTarget](
 `transfer_key` is composed automatically from `handles_source.kind` and
 `handles_destination.kind`, joined with `.`.
 
+### Same-filesystem short-circuit
+
+`transfer()` handles one case before any strategy runs: when `source` and
+`destination` report the **same `location_id`** they share a filesystem, so
+there is nothing to move. The artifact is repointed at its
+[`path_on_target`](./target.md) on the destination and `transfer()` returns
+**without invoking `_transfer()`** (or the middleware). Because this lives at
+the single entry point every transfer flows through, no individual strategy has
+to re-implement it — a strategy's `_transfer()` only ever runs for a genuine
+cross-location move.
+
 ## Registration
 
 `BaseTransferStrategy` uses `AutoRegistryProduct` so the registry key is a
@@ -135,18 +146,16 @@ filesystem primitives every target implements, so a new target kind can transfer
 artifacts to and from anywhere without anyone writing a location-specific
 strategy for it.
 
-Its `_transfer()`:
+Its `_transfer()` only runs for a genuine cross-location move (the
+same-filesystem case is handled upstream by
+[`transfer()`](#same-filesystem-short-circuit)). It **packages** the artifact on
+the source (via [`ArtifactStore`](./artifact.md#artifactstore)), streams the
+single package file through the orchestrator with `get_file` → `put_file`, and
+**unpackages** it on the destination:
 
-1. **short-circuits** when both targets report the same `location_id` (they share
-   a filesystem, so nothing is copied, the artifact path is just repointed);
-2. otherwise **packages** the artifact on the source (via
-   [`ArtifactStore`](./artifact.md#artifactstore)), streams the single package
-   file through the orchestrator with `get_file` → `put_file`, and **unpackages**
-   it on the destination:
-
-   ```text
-   package → get_file → put_file → unpackage
-   ```
+```text
+package → get_file → put_file → unpackage
+```
 
 `GenericTransfer` is not registered by key (`add_to_registry = False`); the
 workflow uses it directly only when no specific strategy is found. Registered
