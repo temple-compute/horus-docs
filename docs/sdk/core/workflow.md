@@ -60,6 +60,7 @@ class BaseWorkflow(AutoRegistry, entry_point="workflow"):
     artifacts: list[BaseArtifact] = Field(default_factory=list)
     edges: list[WorkflowEdge] = Field(default_factory=list)
     orchestrator_target: BaseTarget | None = None
+    capacity: dict[str, ResourceCapacity] | None = None
     status: WorkflowStatus = WorkflowStatus.IDLE
 
     @classmethod
@@ -163,6 +164,24 @@ Workflows may declare `kind_name` and `kind_description` ClassVars to make
 registry entries more discoverable. Use your plugin's translator (created via
 `make_translator` and commonly aliased as `_(...)`) for translatable
 descriptions.
+
+### `capacity`
+
+`capacity` gates concurrency against finite hardware so a large fan-out never
+oversubscribes a machine. It is a `dict[str, ResourceCapacity]` keyed by
+`target.location_id`, so targets that share a machine share one pool
+(`ResourceCapacity`, `PlacementManager`, and `InsufficientCapacityError` live in
+`horus_runtime.core.placement`).
+
+Each capacity dimension left `None` is unconstrained; only declared dimensions
+are gated. When a task becomes ready the placement manager waits on an
+`asyncio.Condition` until the task's declared `ResourceRequest` dimensions fit,
+subtracts them, and adds them back on completion. Placement is opt-in and
+identical to the old behaviour when it does not apply: no capacity declared, or
+`resources=None`, or an unknown location, all acquire immediately, with
+`max_concurrency` still enforced on top. A request that exceeds a location's
+total capacity raises `InsufficientCapacityError` immediately instead of
+blocking the ready-set loop.
 
 ### `orchestrator_target`
 

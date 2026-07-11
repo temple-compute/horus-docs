@@ -97,6 +97,35 @@ resources:
 These are advisory. Resource-aware targets use them; `local` ignores them, but
 the dashboard displays them.
 
+### Capacity: gating concurrency (optional)
+
+Per-task `resources` say what a task wants. A workflow-level `capacity` block
+says how much a machine actually has, so a large fan-out never oversubscribes
+finite hardware (for example, only two GPUs means at most two GPU-requesting
+tasks run at once):
+
+```yaml
+name: my_workflow
+kind: horus_workflow
+capacity:
+  "local://my-host":   # keyed by the target's location id; targets that
+                       # share a machine share one pool
+    gpus: 2
+    memory_gb: 64
+tasks: [ ... ]
+```
+
+The key is the target's location id (for a local target that is
+`local://<hostname>`), so every target on the same machine draws from one pool.
+A task acquires its declared `resources` before it runs and releases them when
+it finishes; while a location is full, further tasks that need those dimensions
+wait. Only the dimensions you declare are gated; anything left out is treated as
+unconstrained. Capacity is opt-in: with no `capacity` (or a task with no
+`resources`, or a task on a location you did not list), tasks acquire
+immediately, exactly as before. `max_concurrency` still applies on top. A single
+task that asks for more than a location's total capacity fails fast rather than
+blocking forever.
+
 ## Referencing artifacts in commands
 
 Inside `command`, `code`, and `args`, use `$`-substitution
