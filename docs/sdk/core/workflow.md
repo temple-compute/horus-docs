@@ -132,6 +132,7 @@ class WorkflowEdge(BaseModel):
     source_output: str   # output artifact id on the source (or the root id)
     target: str          # consumer task id
     target_input: str    # input artifact id on the consumer task
+    transfer: bool = True # False for an ordering-only edge (see below)
 ```
 
 A `source` that names a task declares a **dependency**: the source task must
@@ -154,8 +155,37 @@ WorkflowEdge(
 ```
 
 Because the connection is explicit, the producer output and the consumer input
-may carry **different** `id`s (`parsed` → `ligand`); the old requirement that
+may carry **different** `id`s (`parsed` to `ligand`); the old requirement that
 they share an `id` no longer applies.
+
+### Ordering-only edges (`transfer=False`)
+
+By default an edge does two things at once: it orders the two tasks (source
+before target) and it routes the source artifact into the target input. Set
+`transfer=False` to keep only the ordering and drop the routing:
+
+```python
+WorkflowEdge(
+    source="clone",
+    source_output="slice",
+    target="gather",
+    target_input="results",
+    transfer=False,   # order gather after clone, move no bytes
+)
+```
+
+An ordering-only edge still validates its endpoints and still makes `target`
+depend on `source` in the DAG, but it contributes nothing to the transfer
+source map, so the target input keeps whatever path it already has. This is what
+lets many producers order-gate a single consumer whose real data input is not
+fed by any one upstream edge (for example a populated folder that several tasks
+each write a slice into). Because such an edge routes no data, the
+[one edge per `(target, target_input)`](#edge-validation) rule does not apply to
+it: any number of `transfer=False` edges, plus at most one `transfer=True` edge,
+may feed the same input.
+
+The declarative fan-out / fan-in (map) construct is built on ordering-only
+edges.
 
 ### Kind metadata
 
@@ -282,8 +312,11 @@ transfer. A workflow raises:
   `target_input` that the target task does not declare, a `source_output` that
   the source task does not produce, or a root `source_output` that no root
   artifact declares;
-- `DuplicateEdgeTargetError` if two edges feed the same
-  `(target, target_input)` — each consumer input may be fed by at most one edge.
+- `DuplicateEdgeTargetError` if two **transferring** edges feed the same
+  `(target, target_input)`: each consumer input may be fed by at most one
+  `transfer=True` edge. Ordering-only (`transfer=False`) edges are exempt, since
+  they route no data (see
+  [Ordering-only edges](#ordering-only-edges-transferfalse)).
 
 ### Trigger IDs
 
