@@ -60,6 +60,7 @@ class BaseWorkflow(AutoRegistry, entry_point="workflow"):
     artifacts: list[BaseArtifact] = Field(default_factory=list)
     edges: list[WorkflowEdge] = Field(default_factory=list)
     orchestrator_target: BaseTarget | None = None
+    max_concurrency: int | None = None
     status: WorkflowStatus = WorkflowStatus.IDLE
 
     @classmethod
@@ -195,13 +196,33 @@ See [Transfer Strategy](./transfer.md) for details.
 ## Built-in Workflow
 
 - `HorusWorkflow`: builds the DAG from the workflow `edges`, computes an
-  execution plan from the trigger, and runs tasks in dependency order, skipping
+  execution plan from the trigger, and runs the plan with a concurrent ready-set
+  scheduler (see [Concurrent scheduling](#concurrent-scheduling)), skipping
   tasks whose outputs already exist when `task.skip_if_complete` is `True`
 
 `HorusWorkflow` sets `orchestrator_target = LocalTarget()` by default. For each
-task in the computed plan it calls `transfer_artifacts()` before
-`task.target.dispatch(task)`, then waits for the target to report completion
-before moving to the next task.
+task it becomes eligible to run it calls `transfer_artifacts()` before
+`task.target.dispatch(task)`.
+
+### Concurrent scheduling
+
+`HorusWorkflow` does not execute the plan serially. It runs a **ready-set
+scheduler**: on every iteration it recomputes which tasks have all their
+dependencies satisfied and dispatches all of them at once, then reacts to each
+completion to unblock newly-ready downstream tasks. Independent branches of the
+DAG therefore run concurrently, and the run reacts to actual completion order
+rather than a fixed topological sort.
+
+`max_concurrency` (a `BaseWorkflow` field, `None` = unbounded) caps the number
+of genuinely concurrent dispatches. A single-slot target reused across several
+placements does not serialize them: when the exact target instance a ready task
+declares is already busy, the scheduler hands out an idle `target.model_copy()`
+clone instead of blocking. Cloning is a valid extra slot because targets of the
+same class share a `location_id` (the same filesystem).
+
+Fail-fast is preserved: the first task to raise cancels every task still in
+flight, awaits their unwind, and re-raises, so `run()` still marks the workflow
+`FAILED`. (A workflow can opt out of fail-fast; see `failure_policy`.)
 
 ## Example
 
