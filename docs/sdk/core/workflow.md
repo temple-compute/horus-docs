@@ -60,6 +60,7 @@ class BaseWorkflow(AutoRegistry, entry_point="workflow"):
     artifacts: list[BaseArtifact] = Field(default_factory=list)
     edges: list[WorkflowEdge] = Field(default_factory=list)
     orchestrator_target: BaseTarget | None = None
+    failure_policy: Literal["fail_fast", "continue"] = "fail_fast"
     status: WorkflowStatus = WorkflowStatus.IDLE
 
     @classmethod
@@ -163,6 +164,24 @@ Workflows may declare `kind_name` and `kind_description` ClassVars to make
 registry entries more discoverable. Use your plugin's translator (created via
 `make_translator` and commonly aliased as `_(...)`) for translatable
 descriptions.
+
+### `failure_policy`
+
+`failure_policy` decides how the scheduler reacts to a task failure:
+
+- **`fail_fast`** (default): the first task to raise cancels every other
+  in-flight task, awaits their unwind, and re-raises, so `run()` transitions the
+  workflow to `FAILED`. This is the historical behaviour.
+- **`continue`**: a failed task no longer aborts the run. The scheduler marks
+  the failure's descendants as blocked so they are never dispatched, and lets
+  every other branch of the DAG run to completion. Once nothing more can become
+  ready, if anything failed it raises `WorkflowExecutionError` naming every
+  failed task, so the workflow still ends `FAILED`.
+
+Either policy always ends a run with failures in `FAILED`; the policy only
+controls how much of the DAG runs first. Each newly blocked task emits a
+`HorusTaskEvent` naming the upstream failure, so the event bus and TUI have
+something to show without a new task status.
 
 ### `orchestrator_target`
 
