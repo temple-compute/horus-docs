@@ -380,6 +380,51 @@ Passing a `trigger_id` that does not correspond to a task in the workflow raises
 `UnknownTaskError` (from `execution_plan`). `HorusWorkflow._run` likewise rejects
 an unknown trigger before planning.
 
+## Mutating the DAG at runtime
+
+A workflow's graph is normally fixed at construction time, but it can also be
+grown while the workflow is **running**. Because the scheduler recomputes the
+ready set from `self.tasks` and `self.edges` on every iteration, tasks and edges
+added mid-run are picked up automatically, with no scheduler restart.
+
+`BaseWorkflow` exposes four mutators:
+
+- **`add_artifact(artifact)`**: register a standalone root artifact. Its root id
+  must be unique among the existing roots.
+- **`add_task(task)`**: append a task. Its id must be unique, its input and
+  output ids unique within the task, and it is anchored to the run directory
+  exactly like a construction-time task.
+- **`add_edge(edge)`**: append an edge. Its endpoints must resolve, at most one
+  transferring edge may feed a given `(target, target_input)`, and the edge must
+  not introduce a cycle.
+- **`expand(tasks=[...], edges=[...], artifacts=[...])`**: a transactional
+  batch. The whole batch is validated against the post-batch graph (unique ids,
+  edge resolution, no cycle) and committed all-or-nothing. Edges in the batch
+  may reference tasks or artifacts added in the same batch.
+
+Each mutator uses **incremental** validation that mirrors the construction-time
+model validators (unique ids, endpoint resolution, cycle rejection) rather than
+re-validating the whole model, and reuses the same typed errors:
+`TaskIdsAreNotUniqueError`, `ArtifactIdsAreNotUniqueError`,
+`UnknownEdgeEndpointError`, `DuplicateEdgeTargetError`, and
+`CyclicDependencyError`.
+
+### Reaching the live workflow from a task
+
+A running task reaches the workflow it belongs to through the run context:
+
+```python
+from horus_runtime.context import HorusContext
+
+wf = HorusContext.get_context().workflow
+wf.expand(tasks=[...], edges=[...])
+```
+
+The same workflow is also available as `task.workflow`. This is the seam the
+built-in fan-out / fan-in (map) and loop constructs use to grow the graph while
+it runs: a task computes how many clones it needs, then commits them and their
+wiring in a single `expand(...)`.
+
 ## Registering Custom Workflows
 
 To register workflow plugins, expose them through:
