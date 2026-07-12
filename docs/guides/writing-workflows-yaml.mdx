@@ -133,6 +133,23 @@ A workflow with no edges runs its tasks independently, so only the trigger task
 runs. Add edges to create ordering.
 :::
 
+### Ordering-only edges
+
+An edge normally does two jobs: it orders the two tasks and it routes the
+producer's output into the consumer's input. Add `transfer: false` to keep the
+ordering but move no data:
+
+```yaml
+edges:
+  - { source: clone, source_output: slice, target: gather, target_input: results, transfer: false }
+```
+
+The consumer still waits for the producer, but its input keeps whatever path it
+already has. Ordering-only edges are exempt from the "at most one edge per
+input" rule, so several of them can order-gate the same consumer input,
+alongside at most one regular (transferring) edge. This is the mechanism behind
+fan-in.
+
 ## A complete example
 
 A multi-stage pipeline: `ingest → validate → { text features, image features }
