@@ -1,0 +1,73 @@
+---
+title: Quickstart
+---
+
+# Quickstart
+
+A workflow is a set of tasks. The simplest one has a single task that runs a
+shell command, so that is where we will start.
+
+## 1. Write the workflow
+
+Create a file called `hello.yaml`:
+
+```yaml title="hello.yaml"
+name: hello
+kind: horus_workflow
+
+tasks:
+  - id: greet
+    name: Greet
+    kind: horus_task
+    target: { kind: local, working_directory: "./horus-work" }
+    runtime:
+      kind: command
+      command: "mkdir -p \"$$(dirname $message)\"\necho 'Hello from Horus!' > $message\n"
+    executor:
+      kind: shell
+    outputs:
+      - { kind: file, id: message, path: "./horus-out/message.txt" }
+```
+
+<DownloadButton file="hello.yaml" />
+
+What each piece means:
+
+- `runtime` is what to run. Here it is a shell `command`.
+- `executor` is how to run it. `shell` runs the command in a subprocess.
+- `target` is where to run it. `local` runs on your machine.
+- `outputs` lists the files this task produces. In the command, `$message`
+  expands to the output artifact's path, so the task writes its own output.
+
+## 2. Run it
+
+```bash
+horus run hello.yaml
+```
+
+A live dashboard appears while the workflow runs, with a progress bar, a task
+table, the dependency graph, and a log pane. When the task finishes it turns
+green (`✓`).
+
+## 3. Check the result
+
+```bash
+cat horus-out/message.txt
+```
+
+```text
+Hello from Horus!
+```
+
+You described a task in YAML and Horus ran it, with live progress and the output
+captured on disk.
+
+## Where to go next
+
+- [Core concepts](/guides/concepts) covers workflows, tasks, artifacts, and edges.
+- [Writing workflows in YAML](/guides/writing-workflows-yaml) has the full schema
+  and a multi-task example with dependencies.
+- [Writing workflows in Python](/guides/writing-workflows-python) is for tasks that
+  need real Python logic or user prompts.
+- [Running workflows](/guides/running-workflows) explains the `horus run` command
+  and the live dashboard.

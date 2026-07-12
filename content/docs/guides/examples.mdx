@@ -1,0 +1,373 @@
+---
+title: Examples
+---
+
+# Examples
+
+Small, runnable workflows you can download and run right away, plus a gallery of
+real-world pipelines.
+
+## Starter examples
+
+Download one, then run it with `horus run <file>.yaml` for YAML or
+`python <file>.py` for Python.
+
+<Tabs items={["Hello (YAML)", "Pipeline (YAML)", "Hello (Python)", "Interactive (Python)"]}>
+  <Tab value="Hello (YAML)">
+
+A single shell task that writes a greeting.
+
+<DownloadButton file="hello.yaml" />
+
+```yaml title="hello.yaml"
+name: hello
+kind: horus_workflow
+
+tasks:
+  - id: greet
+    name: Greet
+    kind: horus_task
+    target: { kind: local, working_directory: "./horus-work" }
+    runtime:
+      kind: command
+      command: "mkdir -p \"$$(dirname $message)\"\necho 'Hello from Horus!' > $message\n"
+    executor:
+      kind: shell
+    outputs:
+      - { kind: file, id: message, path: "./horus-out/message.txt" }
+```
+
+```bash
+horus run hello.yaml
+```
+
+  </Tab>
+  <Tab value="Pipeline (YAML)">
+
+A six-task pipeline (`ingest → validate → two feature stages → train → report`)
+that fans out into parallel branches and merges back. It is a good way to watch
+the dependency graph and progress bar in action.
+
+<DownloadButton file="pipeline.yaml" />
+
+```bash
+horus run pipeline.yaml
+```
+
+```yaml title="pipeline.yaml"
+# pipeline.yaml: a multi-task workflow.
+#
+#   horus run pipeline.yaml
+#
+# ingest -> validate -> { text features, image features } -> train -> report
+#
+# It fans out into two parallel feature stages and merges back at training, so
+# the dependency graph is diamond-shaped. The `sleep`s let you watch the live
+# TUI advance. Artifacts are passed between tasks with `$id` substitution (the
+# on-target path), and the `edges` at the bottom declare both the ordering and
+# the artifact routing. `skip_if_complete: false` makes every run actually
+# execute (handy for a demo).
+name: pipeline
+kind: horus_workflow
+
+tasks:
+  - id: ingest
+    name: Ingest data
+    kind: horus_task
+    skip_if_complete: false
+    target: { kind: local, working_directory: "./horus-work" }
+    runtime:
+      kind: command
+      command: "mkdir -p \"$$(dirname $raw)\"\nsleep 1\necho 'rows: 1000' > $raw\n"
+    executor:
+      kind: shell
+    outputs:
+      - { kind: file, id: raw, path: "./horus-out/raw.txt" }
+
+  - id: validate
+    name: Validate schema
+    kind: horus_task
+    skip_if_complete: false
+    target: { kind: local, working_directory: "./horus-work" }
+    runtime:
+      kind: command
+      command: "sleep 1\ncat $raw > $valid\necho 'validated: true' >> $valid\n"
+    executor:
+      kind: shell
+    inputs:
+      - { kind: file, id: raw, path: "./horus-out/raw.txt" }
+    outputs:
+      - { kind: file, id: valid, path: "./horus-out/valid.txt" }
+
+  - id: features_text
+    name: Text features
+    kind: horus_task
+    skip_if_complete: false
+    target: { kind: local, working_directory: "./horus-work" }
+    runtime:
+      kind: command
+      command: "sleep 2\ncat $valid > $feat_text\necho 'text_features: 256' >> $feat_text\n"
+    executor:
+      kind: shell
+    inputs:
+      - { kind: file, id: valid, path: "./horus-out/valid.txt" }
+    outputs:
+      - { kind: file, id: feat_text, path: "./horus-out/feat_text.txt" }
+
+  - id: features_image
+    name: Image features
+    kind: horus_task
+    skip_if_complete: false
+    target: { kind: local, working_directory: "./horus-work" }
+    runtime:
+      kind: command
+      command: "sleep 2\ncat $valid > $feat_image\necho 'image_features: 512' >> $feat_image\n"
+    executor:
+      kind: shell
+    inputs:
+      - { kind: file, id: valid, path: "./horus-out/valid.txt" }
+    outputs:
+      - { kind: file, id: feat_image, path: "./horus-out/feat_image.txt" }
+
+  - id: train
+    name: Train model
+    kind: horus_task
+    skip_if_complete: false
+    target: { kind: local, working_directory: "./horus-work" }
+    resources:
+      cpus: 8
+      gpus: 2
+      memory_gb: 32
+      walltime: "01:00:00"
+    runtime:
+      kind: command
+      command: "sleep 3\ncat $feat_text $feat_image > $model\necho 'model: trained' >> $model\n"
+    executor:
+      kind: shell
+    inputs:
+      - { kind: file, id: feat_text, path: "./horus-out/feat_text.txt" }
+      - { kind: file, id: feat_image, path: "./horus-out/feat_image.txt" }
+    outputs:
+      - { kind: file, id: model, path: "./horus-out/model.txt" }
+
+  - id: report
+    name: Write report
+    kind: horus_task
+    skip_if_complete: false
+    target: { kind: local, working_directory: "./horus-work" }
+    runtime:
+      kind: command
+      command: "sleep 1\necho '=== REPORT ===' > $report\ncat $model >> $report\n"
+    executor:
+      kind: shell
+    inputs:
+      - { kind: file, id: model, path: "./horus-out/model.txt" }
+    outputs:
+      - { kind: file, id: report, path: "./horus-out/report.txt" }
+
+# Edges are the sole source of truth for ordering and the dependency DAG.
+edges:
+  - { source: ingest,         source_output: raw,        target: validate,       target_input: raw }
+  - { source: validate,       source_output: valid,      target: features_text,  target_input: valid }
+  - { source: validate,       source_output: valid,      target: features_image, target_input: valid }
+  - { source: features_text,  source_output: feat_text,  target: train,          target_input: feat_text }
+  - { source: features_image, source_output: feat_image, target: train,          target_input: feat_image }
+  - { source: train,          source_output: model,      target: report,         target_input: model }
+```
+
+The full file is walked through in
+[Writing workflows in YAML](/guides/writing-workflows-yaml#a-complete-example).
+
+  </Tab>
+  <Tab value="Hello (Python)">
+
+The same idea in Python: two `FunctionTask`s wired by an edge.
+
+<DownloadButton file="hello_workflow.py" />
+
+```bash
+python hello_workflow.py
+```
+
+```python title="hello_workflow.py"
+"""A minimal Python-defined Horus workflow.
+
+  python hello_workflow.py
+
+Two tasks wired by an edge: ``make_greeting`` writes a file, ``shout_it`` reads
+it and writes an uppercased copy. ``render_workflow`` runs the workflow under
+the same live TUI as ``horus run``. Reach for a Python workflow when a task
+needs real Python logic, such as reading or processing files, calling a
+library, or prompting the user (see interactive_workflow.py).
+"""
+
+from pathlib import Path
+
+from horus_builtin.artifact.file import FileArtifact
+from horus_builtin.event.tui_subscriber import render_workflow
+from horus_builtin.target.local import LocalTarget
+from horus_builtin.task.function import FunctionTask
+from horus_builtin.workflow.horus_workflow import HorusWorkflow
+from horus_runtime.context import HorusContext
+from horus_runtime.core.artifact.base import BaseArtifact
+from horus_runtime.core.workflow.edge import WorkflowEdge
+
+# Boot the runtime once before building or running anything.
+HorusContext.boot()
+
+wf = HorusWorkflow(name="hello_python")
+
+# Per-task scratch lives under ./horus-work; outputs under ./horus-out.
+work = LocalTarget(working_directory="./horus-work")
+greeting = FileArtifact(id="greeting", path=Path("horus-out/greeting.txt"))
+shout = FileArtifact(id="shout", path=Path("horus-out/shout.txt"))
+
+
+# The task id and name default to the function name ("make_greeting"). The
+# parameters after `task` are the task's artifacts, matched by their id.
+@FunctionTask.task(wf, outputs=[greeting], target=work)
+async def make_greeting(
+  task: FunctionTask, greeting: FileArtifact
+) -> list[BaseArtifact]:
+  """Write a greeting to the output artifact."""
+  greeting.write("Hello from a Python workflow!")
+  return []
+
+
+@FunctionTask.task(wf, inputs=[greeting], outputs=[shout], target=work)
+async def shout_it(
+  task: FunctionTask, greeting: FileArtifact, shout: FileArtifact
+) -> list[BaseArtifact]:
+  """Read the greeting and write an uppercased version."""
+  shout.write(greeting.read().upper())
+  return []
+
+
+# Wire make_greeting's output into shout_it's input: this declares the ordering.
+wf.edges.append(
+  WorkflowEdge(
+    source="make_greeting",
+    source_output="greeting",
+    target="shout_it",
+    target_input="greeting",
+  )
+)
+
+if __name__ == "__main__":
+  # Trigger from the first task; the edge pulls shout_it in as a descendant.
+  render_workflow(wf, trigger_id="make_greeting")
+```
+
+See [Writing workflows in Python](/guides/writing-workflows-python) for the full
+listing and explanation.
+
+  </Tab>
+  <Tab value="Interactive (Python)">
+
+A Python task that prompts the user for input. The live dashboard pauses for the
+prompt, then resumes.
+
+<DownloadButton file="interactive_workflow.py" />
+
+```bash
+python interactive_workflow.py
+```
+
+```python title="interactive_workflow.py"
+"""A Python workflow that prompts the user.
+
+  python interactive_workflow.py
+
+A ``FunctionTask`` can ask the user questions through ``task.interaction``. When
+running under the live TUI, the dashboard pauses while the prompt is shown and
+resumes once you answer. YAML workflows cannot do this; it needs real Python.
+"""
+
+from pathlib import Path
+
+from horus_builtin.artifact.file import FileArtifact
+from horus_builtin.event.tui_subscriber import render_workflow
+from horus_builtin.interaction.common.confirm import ConfirmInteraction
+from horus_builtin.interaction.common.string import StringInteraction
+from horus_builtin.target.local import LocalTarget
+from horus_builtin.task.function import FunctionTask
+from horus_builtin.workflow.horus_workflow import HorusWorkflow
+from horus_runtime.context import HorusContext
+from horus_runtime.core.artifact.base import BaseArtifact
+
+HorusContext.boot()
+
+wf = HorusWorkflow(name="interactive")
+
+work = LocalTarget(working_directory="./horus-work")
+greeting = FileArtifact(id="greeting", path=Path("horus-out/greeting.txt"))
+
+
+@FunctionTask.task(wf, outputs=[greeting], target=work)
+async def greet_user(
+  task: FunctionTask, greeting: FileArtifact
+) -> list[BaseArtifact]:
+  """Ask the user for their name, confirm, then write a greeting."""
+  name = await task.interaction.ask(
+    StringInteraction(
+      value_key="name",
+      prompt="What is your name?",
+      default="World",
+    )
+  )
+
+  shout = await task.interaction.ask(
+    ConfirmInteraction(
+      value_key="shout",
+      prompt="Shout the greeting?",
+      default=False,
+    )
+  )
+
+  message = f"Hello, {name}!"
+  greeting.write(message.upper() if shout else message)
+  return []
+
+
+if __name__ == "__main__":
+  render_workflow(wf, trigger_id="greet_user")
+```
+
+See [Prompting the user](/guides/writing-workflows-python#prompting-the-user).
+
+  </Tab>
+</Tabs>
+
+## Real-world workflows
+
+The [Horus Workflow Repository](https://github.com/templecompute/horus-workflows)
+is a curated, open library of production AI pipelines that send each stage to the
+right kind of compute, for example H100s for training and cheaper GPUs for
+serving.
+
+The featured, end-to-end implementation is W-01, Boltz-2 Virtual Screening: a
+three-stage drug-discovery pipeline (`prep → predict → rank`) that stages inputs
+to a remote GPU box over SSH, runs structure prediction in a container, and ranks
+the hits locally. It is a good template for building your own multi-target Python
+workflow.
+[Browse W-01](https://github.com/templecompute/horus-workflows/tree/main/workflows/drug-discovery/w01-boltz2-virtual-screening).
+
+### Catalog
+
+The remaining entries are detailed architecture blueprints (README specs) you
+can adapt:
+
+| ID | Workflow | Domain |
+|----|----------|--------|
+| [W-01](https://github.com/templecompute/horus-workflows/tree/main/workflows/drug-discovery/w01-boltz2-virtual-screening) | Boltz-2 virtual screening | Drug discovery |
+| [W-02](https://github.com/templecompute/horus-workflows/tree/main/workflows/drug-discovery/w02-de-novo-protein-design) | De novo protein design | Drug discovery |
+| [W-03](https://github.com/templecompute/horus-workflows/tree/main/workflows/drug-discovery/w03-abfe-pipeline) | ABFE binding free energy | Drug discovery |
+| [W-04](https://github.com/templecompute/horus-workflows/tree/main/workflows/genomics/w04-scrna-seq-gpu) | Single-cell RNA-seq (GPU) | Genomics |
+| [W-05](https://github.com/templecompute/horus-workflows/tree/main/workflows/language-models/w05-llm-finetune-deploy) | LLM fine-tune and deploy | Language models |
+| [W-06](https://github.com/templecompute/horus-workflows/tree/main/workflows/language-models/w06-rag-knowledge-base) | RAG knowledge base | Language models |
+| [W-07](https://github.com/templecompute/horus-workflows/tree/main/workflows/language-models/w07-vlm-training-serving) | Vision-language model train and serve | Language models |
+| [W-08](https://github.com/templecompute/horus-workflows/tree/main/workflows/scientific-computing/w08-climate-emulator) | Climate emulator | Scientific computing |
+| [W-09](https://github.com/templecompute/horus-workflows/tree/main/workflows/scientific-computing/w09-materials-discovery) | Materials discovery | Scientific computing |
+| [W-10](https://github.com/templecompute/horus-workflows/tree/main/workflows/medical-imaging/w10-medical-segmentation) | Medical image segmentation | Medical imaging |
+| [W-11](https://github.com/templecompute/horus-workflows/tree/main/workflows/medical-imaging/w11-satellite-imagery) | Satellite imagery foundation model | Geospatial |
+| [W-12](https://github.com/templecompute/horus-workflows/tree/main/workflows/reinforcement-learning/w12-rl-training-policy) | Large-scale RL training | Reinforcement learning |

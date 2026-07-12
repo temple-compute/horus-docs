@@ -1,0 +1,13 @@
+{
+  "title": "SDK",
+  "root": true,
+  "pages": [
+    "overview",
+    "core",
+    "plugin-system",
+    "context",
+    "event_system",
+    "logger",
+    "i18n"
+  ]
+}

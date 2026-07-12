@@ -1,0 +1,169 @@
+---
+title: Fan-out and fan-in (map)
+---
+
+# Fan-out and fan-in (map)
+
+A **map** runs one task many times over a collection, then collects the results.
+It fans a single template task out into N clones, runs them concurrently, and
+fans their outputs into a pre-existing **gather** task. You do not write the N
+clones by hand: you declare the template once and Horus expands it at run time,
+once the source collection is known.
+
+There are two modes:
+
+- **Collection mode** fans out over the items of an upstream task's output: the
+  children of a `folder` artifact (sorted by name) or the elements of a `json`
+  list (in list order).
+- **Range mode** fans out over `range(0, N)`, feeding each clone its integer
+  index. There is no upstream source.
+
+## Collection mode (YAML)
+
+Use a `map:` block in place of a normal task body. The `over` block points at the
+collection to fan over, `template` is the per-clone task, and `gather` names the
+existing task (and its input) that receives all the outputs:
+
+```yaml
+name: score_batches
+kind: horus_workflow
+
+tasks:
+  - id: split
+    name: Split into batches
+    kind: horus_task
+    target: { kind: local, working_directory: "./horus-work" }
+    runtime: { kind: command, command: "true" }   # produces ./horus-out/batches/*
+    executor: { kind: shell }
+    outputs:
+      - { kind: folder, id: batches, path: "./horus-out/batches" }
+
+  - id: score
+    map:
+      over: { source_task: split, source_output: batches, item_input: batch }
+      template:
+        kind: horus_task
+        target: { kind: local, working_directory: "./horus-work" }
+        runtime:
+          kind: command
+          command: "mkdir -p $scored && cp $batch/data.txt $scored/out.txt"
+        executor: { kind: shell }
+        inputs:
+          - { kind: folder, id: batch, path: "batch_in" }
+        outputs:
+          - { kind: folder, id: scored, path: "scored_out" }
+      gather: { task: collect, input: results }
+
+  - id: collect
+    name: Collect results
+    kind: horus_task
+    target: { kind: local, working_directory: "./horus-work" }
+    runtime: { kind: command, command: "ls $results > $summary" }
+    executor: { kind: shell }
+    inputs:
+      - { kind: folder, id: results, path: "./horus-out/gathered" }
+    outputs:
+      - { kind: file, id: summary, path: "./horus-out/summary.txt" }
+```
+
+The `over` block has three parts:
+
+| Field | Meaning |
+|-------|---------|
+| `source_task` | the upstream task that produces the collection |
+| `source_output` | the output artifact id on that task holding the collection |
+| `item_input` | the input id on `template` that each clone receives its item as |
+
+Run it triggered by the source task:
+
+```bash
+horus run score_batches.yaml --trigger split
+```
+
+## Range mode (YAML)
+
+Give `range` a count and `index_input` the template input that receives the
+integer index. There is no `over` block and no upstream source:
+
+```yaml
+  - id: sample
+    map:
+      range: 8
+      index_input: idx
+      template:
+        kind: horus_task
+        target: { kind: local, working_directory: "./horus-work" }
+        runtime:
+          kind: command
+          command: "mkdir -p $out && cp $idx $out/idx.json"
+        executor: { kind: shell }
+        inputs:
+          - { kind: file, id: idx, path: "idx_in" }
+        outputs:
+          - { kind: folder, id: out, path: "out" }
+      gather: { task: collect, input: results }
+```
+
+Each clone's `idx` input is a small JSON file holding its index, so the template
+reads it like any other input artifact. In collection mode you may also set
+`index_input` to give every clone its numeric index alongside its item.
+
+## In Python
+
+`wf.map(...)` mirrors the YAML block. `template` is a full task object (its own
+`id` and `name` are ignored, every clone gets its own), `over` is the
+`(source_task, source_output, item_input)` triple for collection mode or `range`
+for range mode, and `gather` is the `(gather_task_id, gather_input_id)` pair:
+
+```python
+# Collection mode: fan out over split's "batches" output.
+wf.map(
+    id="score",
+    template=score_template,
+    over=("split", "batches", "batch"),
+    gather=("collect", "results"),
+)
+
+# Range mode: run the body 8 times, feeding each clone its index.
+wf.map(
+    id="sample",
+    template=sample_template,
+    range=8,
+    index_input="idx",
+    gather=("collect", "results"),
+)
+```
+
+`over` and `range` are mutually exclusive: pass exactly one. An optional
+`target=` sets where the expander itself runs (it defaults to a local target).
+
+## How the clones and the gather task line up
+
+- The template must declare **exactly one output**. That output is what gets
+  fanned into the gather task.
+- Clones get deterministic, zero-padded ids: `score[0]`, `score[1]`, and so on.
+- Clone `i` writes into `{id}.gathered/{i}/`, and the gather task's designated
+  input is pointed at `{id}.gathered/`, so the gather task sees every clone's
+  output as children of one folder.
+- The gather task must already exist in the workflow and declare the input named
+  in `gather`.
+
+## Resuming a partial map
+
+The expander declares no meaningful output, so it always re-runs and
+deterministically re-derives the same set of clones. Each clone is skipped
+independently through the ordinary `skip_if_complete` behaviour if its own output
+already exists. A map that was interrupted part way through therefore resumes:
+finished clones are skipped and only the remaining ones run.
+
+## Under the hood
+
+The clones and the gather task are wired into the live DAG with **ordering-only
+edges** (`transfer: false`), committed atomically through the runtime
+`expand(...)` API. Ordering-only edges keep the clones and the gather task inside
+the scheduler's reachable scope without letting the generic transfer step
+repoint a clone's already-materialized slice at the whole upstream collection.
+See the [workflow reference](/sdk/core/workflow) for the edge mechanism.
+
+Range mode is exactly a bounded, counted loop. For a loop that repeats while a
+predicate holds, see the Loops guide.

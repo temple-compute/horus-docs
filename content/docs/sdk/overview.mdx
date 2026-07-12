@@ -1,0 +1,39 @@
+---
+title: Overview
+---
+
+# Runtime SDK
+
+The Horus runtime provides an extensible SDK for defining artifacts, runtimes,
+executors, targets, tasks, workflows, and interactive runtime interactions.
+
+At a high level:
+
+- `Runtime` defines what should run
+- `Executor` defines how it runs
+- `Target` defines where it runs
+
+## Core Abstractions
+
+- [Artifact](/sdk/core/artifact)
+- [Executor](/sdk/core/executor)
+- [Runtime](/sdk/core/runtime)
+- [Target](/sdk/core/target)
+- [Task](/sdk/core/task)
+- [FunctionTask](/sdk/core/function-task)
+- [Interaction](/sdk/core/interaction)
+- [Workflow](/sdk/core/workflow)
+
+## Plugin system
+
+- [Auto-Registry](/sdk/plugin-system/autoregistry)
+- [Middleware Overview](/sdk/plugin-system/middleware/overview)
+
+## Features
+
+- Extensible plugin system via Python entry points
+- Artifact-driven workflow execution
+- Shell-based and Python-native task execution
+- Code-first workflows with `FunctionTask`
+- Typed runtime interaction support with pluggable transports and renderers
+- [Internationalization (i18n)](/sdk/i18n)

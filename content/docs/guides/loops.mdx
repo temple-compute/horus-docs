@@ -1,0 +1,115 @@
+---
+title: Loops
+---
+
+# Loops
+
+Horus supports two loop shapes: a **bounded** loop that runs a fixed number of
+times, and a **conditional** loop that repeats while a predicate holds.
+
+## Bounded loop (run N times)
+
+A counted loop is exactly a **range map**: it fans a body task out into N
+indexed clones that run concurrently. Use the `map:` block in range mode:
+
+```yaml
+  - id: sweep
+    map:
+      range: 10
+      index_input: idx
+      template:
+        kind: horus_task
+        target: { kind: local, working_directory: "./horus-work" }
+        runtime:
+          kind: command
+          command: "mkdir -p $out && cp $idx $out/run.json"
+        executor: { kind: shell }
+        inputs:
+          - { kind: file, id: idx, path: "idx_in" }
+        outputs:
+          - { kind: folder, id: out, path: "out" }
+      gather: { task: collect, input: results }
+```
+
+The iterations are independent and run in parallel, so reach for this whenever
+"run exactly N times" is all you need. See the Fan-out and fan-in guide for the
+full range-map reference.
+
+## Conditional loop (repeat while a predicate holds)
+
+When you cannot know the iteration count up front, use a `loop:` block. It runs
+a **body** task one iteration at a time, forward-only, and after each iteration
+decides whether to run another, up to a hard `max_iterations` safety bound:
+
+```yaml
+  - id: refine
+    loop:
+      until: signal
+      max_iterations: 20
+      index_input: idx
+      body:
+        kind: horus_task
+        target: { kind: local, working_directory: "./horus-work" }
+        runtime:
+          kind: command
+          command: |
+            i=$(cat "$idx")
+            if [ "$i" -ge 5 ]; then c=false; else c=true; fi
+            printf '{"continue": %s}' "$c" > "$signal"
+        executor: { kind: shell }
+        inputs:
+          - { kind: file, id: idx, path: "idx_in" }
+        outputs:
+          - { kind: file, id: signal, path: "signal_out" }
+```
+
+The `loop:` block has four fields:
+
+| Field | Meaning |
+|-------|---------|
+| `body` | the per-iteration template task, in full |
+| `until` | the id of the body output that carries the predicate |
+| `max_iterations` | hard cap on total iterations, always enforced |
+| `index_input` | optional body input that receives the iteration index |
+
+### The predicate is a sentinel artifact
+
+Horus does not run a Python callback between iterations (a raw closure cannot be
+serialized). Instead the body task writes its own decision: the output named by
+`until` is a small JSON file shaped `{"continue": <bool>}`. After each iteration
+the controller reads that file off the body's target and injects the next
+iteration only when it says `true`.
+
+The **first iteration always runs** (there is no prior body to check yet), so a
+loop behaves like a do-while: it runs at least once. `max_iterations` is enforced
+on top of the predicate, so a body that never writes `{"continue": false}` still
+stops.
+
+## In Python
+
+`wf.loop(...)` mirrors the `loop:` block. `body` is a full task object, `until`
+names its predicate output, and `max_iterations` bounds the run:
+
+```python
+wf.loop(
+    id="refine",
+    body=refine_body,
+    until="signal",
+    max_iterations=20,
+    index_input="idx",
+)
+
+await wf.run(trigger_id="refine")
+```
+
+`index_input`, `name`, and `target` are optional (`target` defaults to a local
+target).
+
+## How iterations are injected
+
+Each controller step injects at most two new forward nodes through the runtime
+`expand(...)` API: the next body clone (`refine#k`) and a fresh controller check
+(`refine~k`) that runs after it. Every wiring edge is ordering-only
+(`transfer: false`), and because injection only ever adds an edge from an
+existing node to a brand-new one, it can never close a cycle: the DAG stays
+acyclic as it grows.

@@ -1,0 +1,66 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+
+/*
+  Temple Compute brand palette, mapped onto Fumadocs' `--color-fd-*` tokens.
+  Light  = Sanctuary cream bg / Foundation navy text / Slate Blue accent.
+  Dark   = Deep Charcoal bg / cream text / Temple Amber accent.
+*/
+@theme {
+  --color-fd-background: #faf9f6; /* Sanctuary cream */
+  --color-fd-foreground: #1a2332; /* Foundation navy */
+  --color-fd-muted: #efedea;
+  --color-fd-muted-foreground: #5b7c99; /* Slate Blue */
+  --color-fd-popover: #ffffff;
+  --color-fd-popover-foreground: #1a2332;
+  --color-fd-card: #ffffff;
+  --color-fd-card-foreground: #1a2332;
+  --color-fd-border: #e3e0db; /* Compute Silver-ish */
+  --color-fd-primary: #d4a574; /* Temple Amber accent (light) */
+  --color-fd-primary-foreground: #1a2332; /* navy text on amber */
+  --color-fd-secondary: #efedea;
+  --color-fd-secondary-foreground: #1a2332;
+  --color-fd-accent: #e8e6e3; /* Compute Silver */
+  --color-fd-accent-foreground: #1a2332;
+  --color-fd-ring: #d4a574;
+
+  /* Semantic / callout colors */
+  --color-fd-info: #5b7c99;
+  --color-fd-warning: #d4a574; /* Warning / Temple Amber */
+  --color-fd-error: #c1685f; /* Error */
+  --color-fd-success: #4a9b8e; /* Success */
+  --color-fd-idea: #d4a574;
+
+  /* Inter is the site sans; wire it into Tailwind's default font stack. */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+.dark {
+  --color-fd-background: #0f1419; /* Deep Charcoal */
+  --color-fd-foreground: #faf9f6; /* Sanctuary cream */
+  --color-fd-muted: #1a2332; /* Foundation navy */
+  --color-fd-muted-foreground: #aeb9c4;
+  --color-fd-popover: #161d26;
+  --color-fd-popover-foreground: #faf9f6;
+  --color-fd-card: #1a2332; /* Foundation navy */
+  --color-fd-card-foreground: #faf9f6;
+  --color-fd-border: #2a3646;
+  --color-fd-primary: #d4a574; /* Temple Amber accent (dark) */
+  --color-fd-primary-foreground: #0f1419;
+  --color-fd-secondary: #1a2332;
+  --color-fd-secondary-foreground: #faf9f6;
+  --color-fd-accent: #1e2a38;
+  --color-fd-accent-foreground: #faf9f6;
+  --color-fd-ring: #d4a574;
+}
+
+html {
+  scrollbar-gutter: stable;
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+html > body[data-scroll-locked] {
+  margin-right: 0px !important;
+  --removed-body-scroll-bar-size: 0px !important;
+}

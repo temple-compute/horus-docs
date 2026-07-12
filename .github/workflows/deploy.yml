@@ -4,8 +4,6 @@ on:
     push:
         branches:
             - main
-        # Review gh actions docs if you want to further define triggers, paths, etc
-        # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#on
 
 concurrency:
     group: pages
@@ -13,26 +11,25 @@ concurrency:
 
 jobs:
     build:
-        name: Build Docusaurus
+        name: Build Fumadocs site
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
               with:
                   fetch-depth: 0
-            - uses: actions/setup-node@v4
+            - uses: oven-sh/setup-bun@v2
               with:
-                  node-version: 20
-                  cache: npm
+                  bun-version: latest
 
             - name: Install dependencies
-              run: npm ci
+              run: bun install --frozen-lockfile
             - name: Build website
-              run: npm run build
+              run: bun run build
 
             - name: Upload Build Artifact
               uses: actions/upload-pages-artifact@v3
               with:
-                  path: build
+                  path: out
 
     deploy:
         name: Deploy to GitHub Pages

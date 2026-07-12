@@ -1,0 +1,17 @@
+{
+  "title": "Core",
+  "pages": [
+    "artifact",
+    "executor",
+    "side-artifact",
+    "runtime",
+    "artifact-substitution",
+    "target",
+    "detaching",
+    "function-task",
+    "task",
+    "interaction",
+    "transfer",
+    "workflow"
+  ]
+}

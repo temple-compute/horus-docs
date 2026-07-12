@@ -1,0 +1,16 @@
+{
+  "title": "Docs",
+  "root": true,
+  "pages": [
+    "installation",
+    "quickstart",
+    "concepts",
+    "writing-workflows-yaml",
+    "writing-workflows-python",
+    "fan-out-fan-in",
+    "loops",
+    "running-workflows",
+    "examples",
+    "extending"
+  ]
+}
