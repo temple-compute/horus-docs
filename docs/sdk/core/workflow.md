@@ -61,6 +61,7 @@ class BaseWorkflow(AutoRegistry, entry_point="workflow"):
     edges: list[WorkflowEdge] = Field(default_factory=list)
     orchestrator_target: BaseTarget | None = None
     failure_policy: Literal["fail_fast", "continue"] = "fail_fast"
+    max_concurrency: int | None = None
     status: WorkflowStatus = WorkflowStatus.IDLE
 
     @classmethod
@@ -133,6 +134,7 @@ class WorkflowEdge(BaseModel):
     source_output: str   # output artifact id on the source (or the root id)
     target: str          # consumer task id
     target_input: str    # input artifact id on the consumer task
+    transfer: bool = True # False for an ordering-only edge (see below)
 ```
 
 A `source` that names a task declares a **dependency**: the source task must
@@ -155,8 +157,37 @@ WorkflowEdge(
 ```
 
 Because the connection is explicit, the producer output and the consumer input
-may carry **different** `id`s (`parsed` → `ligand`); the old requirement that
+may carry **different** `id`s (`parsed` to `ligand`); the old requirement that
 they share an `id` no longer applies.
+
+### Ordering-only edges (`transfer=False`)
+
+By default an edge does two things at once: it orders the two tasks (source
+before target) and it routes the source artifact into the target input. Set
+`transfer=False` to keep only the ordering and drop the routing:
+
+```python
+WorkflowEdge(
+    source="clone",
+    source_output="slice",
+    target="gather",
+    target_input="results",
+    transfer=False,   # order gather after clone, move no bytes
+)
+```
+
+An ordering-only edge still validates its endpoints and still makes `target`
+depend on `source` in the DAG, but it contributes nothing to the transfer
+source map, so the target input keeps whatever path it already has. This is what
+lets many producers order-gate a single consumer whose real data input is not
+fed by any one upstream edge (for example a populated folder that several tasks
+each write a slice into). Because such an edge routes no data, the
+[one edge per `(target, target_input)`](#edge-validation) rule does not apply to
+it: any number of `transfer=False` edges, plus at most one `transfer=True` edge,
+may feed the same input.
+
+The declarative fan-out / fan-in (map) construct is built on ordering-only
+edges.
 
 ### Kind metadata
 
@@ -214,13 +245,33 @@ See [Transfer Strategy](./transfer.md) for details.
 ## Built-in Workflow
 
 - `HorusWorkflow`: builds the DAG from the workflow `edges`, computes an
-  execution plan from the trigger, and runs tasks in dependency order, skipping
+  execution plan from the trigger, and runs the plan with a concurrent ready-set
+  scheduler (see [Concurrent scheduling](#concurrent-scheduling)), skipping
   tasks whose outputs already exist when `task.skip_if_complete` is `True`
 
 `HorusWorkflow` sets `orchestrator_target = LocalTarget()` by default. For each
-task in the computed plan it calls `transfer_artifacts()` before
-`task.target.dispatch(task)`, then waits for the target to report completion
-before moving to the next task.
+task it becomes eligible to run it calls `transfer_artifacts()` before
+`task.target.dispatch(task)`.
+
+### Concurrent scheduling
+
+`HorusWorkflow` does not execute the plan serially. It runs a **ready-set
+scheduler**: on every iteration it recomputes which tasks have all their
+dependencies satisfied and dispatches all of them at once, then reacts to each
+completion to unblock newly-ready downstream tasks. Independent branches of the
+DAG therefore run concurrently, and the run reacts to actual completion order
+rather than a fixed topological sort.
+
+`max_concurrency` (a `BaseWorkflow` field, `None` = unbounded) caps the number
+of genuinely concurrent dispatches. A single-slot target reused across several
+placements does not serialize them: when the exact target instance a ready task
+declares is already busy, the scheduler hands out an idle `target.model_copy()`
+clone instead of blocking. Cloning is a valid extra slot because targets of the
+same class share a `location_id` (the same filesystem).
+
+Fail-fast is preserved: the first task to raise cancels every task still in
+flight, awaits their unwind, and re-raises, so `run()` still marks the workflow
+`FAILED`. (A workflow can opt out of fail-fast; see `failure_policy`.)
 
 ## Example
 
@@ -301,8 +352,11 @@ transfer. A workflow raises:
   `target_input` that the target task does not declare, a `source_output` that
   the source task does not produce, or a root `source_output` that no root
   artifact declares;
-- `DuplicateEdgeTargetError` if two edges feed the same
-  `(target, target_input)` — each consumer input may be fed by at most one edge.
+- `DuplicateEdgeTargetError` if two **transferring** edges feed the same
+  `(target, target_input)`: each consumer input may be fed by at most one
+  `transfer=True` edge. Ordering-only (`transfer=False`) edges are exempt, since
+  they route no data (see
+  [Ordering-only edges](#ordering-only-edges-transferfalse)).
 
 ### Trigger IDs
 
