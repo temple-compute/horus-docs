@@ -17,7 +17,21 @@ name: my_workflow        # required; letters, digits, spaces, _ and -
 kind: horus_workflow     # required; selects the built-in workflow
 tasks: []                # the list of tasks (below)
 edges: []                # dependencies between tasks (below)
+failure_policy: fail_fast  # optional; fail_fast (default) or continue
 ```
+
+### Failure policy
+
+`failure_policy` controls what the workflow does when a task fails:
+
+- **`fail_fast`** (default): the first task to fail cancels every other running
+  task and fails the run immediately.
+- **`continue`**: a failed task blocks only its own downstream tasks (they never
+  run); every other branch of the DAG runs to completion. The run still ends as
+  `FAILED`, and the failed tasks are reported when it finishes.
+
+Either way a run with any failure ends `FAILED`. The policy only decides how
+much of the graph runs before that happens.
 
 ## Task
 
@@ -161,6 +175,23 @@ one edge, and the graph must be acyclic.
 A workflow with no edges runs its tasks independently, so only the trigger task
 runs. Add edges to create ordering.
 :::
+
+### Ordering-only edges
+
+An edge normally does two jobs: it orders the two tasks and it routes the
+producer's output into the consumer's input. Add `transfer: false` to keep the
+ordering but move no data:
+
+```yaml
+edges:
+  - { source: clone, source_output: slice, target: gather, target_input: results, transfer: false }
+```
+
+The consumer still waits for the producer, but its input keeps whatever path it
+already has. Ordering-only edges are exempt from the "at most one edge per
+input" rule, so several of them can order-gate the same consumer input,
+alongside at most one regular (transferring) edge. This is the mechanism behind
+fan-in.
 
 ## A complete example
 

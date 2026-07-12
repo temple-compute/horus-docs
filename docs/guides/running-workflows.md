@@ -69,6 +69,28 @@ render_workflow(wf, trigger_id="make_greeting")
 
 See [Writing workflows in Python](./writing-workflows-python.mdx).
 
+## How tasks are scheduled
+
+Horus does not walk the graph one task at a time. It runs a **ready-set
+scheduler**: as soon as a task's dependencies are all satisfied, it is
+dispatched, and it runs concurrently with every other task that is also ready.
+The scheduler reacts to each completion and unblocks whatever became ready as a
+result, so independent branches of the DAG progress in parallel rather than
+waiting on an arbitrary serial order.
+
+Two knobs bound the concurrency:
+
+- **`max_concurrency`** (a workflow field, unbounded by default) caps how many
+  tasks may run at once. A workflow that reuses a single-slot target across many
+  placements still runs them concurrently: the scheduler hands each concurrent
+  use its own copy of the target (same machine, same filesystem).
+- **`capacity`** gates concurrency against finite resources per machine. See
+  [resource-aware placement](./writing-workflows-yaml.mdx#resources-optional) if
+  your tasks declare `resources`.
+
+A failure still fails the run. By default the first failing task cancels the
+others (fail-fast); see `failure_policy` to keep unaffected branches running.
+
 ## The live dashboard
 
 While a workflow runs, `horus run` shows a live terminal dashboard:

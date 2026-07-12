@@ -61,6 +61,8 @@ class BaseWorkflow(AutoRegistry, entry_point="workflow"):
     edges: list[WorkflowEdge] = Field(default_factory=list)
     orchestrator_target: BaseTarget | None = None
     capacity: dict[str, ResourceCapacity] | None = None
+    failure_policy: Literal["fail_fast", "continue"] = "fail_fast"
+    max_concurrency: int | None = None
     status: WorkflowStatus = WorkflowStatus.IDLE
 
     @classmethod
@@ -133,6 +135,7 @@ class WorkflowEdge(BaseModel):
     source_output: str   # output artifact id on the source (or the root id)
     target: str          # consumer task id
     target_input: str    # input artifact id on the consumer task
+    transfer: bool = True # False for an ordering-only edge (see below)
 ```
 
 A `source` that names a task declares a **dependency**: the source task must
@@ -155,8 +158,37 @@ WorkflowEdge(
 ```
 
 Because the connection is explicit, the producer output and the consumer input
-may carry **different** `id`s (`parsed` → `ligand`); the old requirement that
+may carry **different** `id`s (`parsed` to `ligand`); the old requirement that
 they share an `id` no longer applies.
+
+### Ordering-only edges (`transfer=False`)
+
+By default an edge does two things at once: it orders the two tasks (source
+before target) and it routes the source artifact into the target input. Set
+`transfer=False` to keep only the ordering and drop the routing:
+
+```python
+WorkflowEdge(
+    source="clone",
+    source_output="slice",
+    target="gather",
+    target_input="results",
+    transfer=False,   # order gather after clone, move no bytes
+)
+```
+
+An ordering-only edge still validates its endpoints and still makes `target`
+depend on `source` in the DAG, but it contributes nothing to the transfer
+source map, so the target input keeps whatever path it already has. This is what
+lets many producers order-gate a single consumer whose real data input is not
+fed by any one upstream edge (for example a populated folder that several tasks
+each write a slice into). Because such an edge routes no data, the
+[one edge per `(target, target_input)`](#edge-validation) rule does not apply to
+it: any number of `transfer=False` edges, plus at most one `transfer=True` edge,
+may feed the same input.
+
+The declarative fan-out / fan-in (map) construct is built on ordering-only
+edges.
 
 ### Kind metadata
 
@@ -182,6 +214,23 @@ identical to the old behaviour when it does not apply: no capacity declared, or
 `max_concurrency` still enforced on top. A request that exceeds a location's
 total capacity raises `InsufficientCapacityError` immediately instead of
 blocking the ready-set loop.
+### `failure_policy`
+
+`failure_policy` decides how the scheduler reacts to a task failure:
+
+- **`fail_fast`** (default): the first task to raise cancels every other
+  in-flight task, awaits their unwind, and re-raises, so `run()` transitions the
+  workflow to `FAILED`. This is the historical behaviour.
+- **`continue`**: a failed task no longer aborts the run. The scheduler marks
+  the failure's descendants as blocked so they are never dispatched, and lets
+  every other branch of the DAG run to completion. Once nothing more can become
+  ready, if anything failed it raises `WorkflowExecutionError` naming every
+  failed task, so the workflow still ends `FAILED`.
+
+Either policy always ends a run with failures in `FAILED`; the policy only
+controls how much of the DAG runs first. Each newly blocked task emits a
+`HorusTaskEvent` naming the upstream failure, so the event bus and TUI have
+something to show without a new task status.
 
 ### `orchestrator_target`
 
@@ -214,13 +263,33 @@ See [Transfer Strategy](./transfer.md) for details.
 ## Built-in Workflow
 
 - `HorusWorkflow`: builds the DAG from the workflow `edges`, computes an
-  execution plan from the trigger, and runs tasks in dependency order, skipping
+  execution plan from the trigger, and runs the plan with a concurrent ready-set
+  scheduler (see [Concurrent scheduling](#concurrent-scheduling)), skipping
   tasks whose outputs already exist when `task.skip_if_complete` is `True`
 
 `HorusWorkflow` sets `orchestrator_target = LocalTarget()` by default. For each
-task in the computed plan it calls `transfer_artifacts()` before
-`task.target.dispatch(task)`, then waits for the target to report completion
-before moving to the next task.
+task it becomes eligible to run it calls `transfer_artifacts()` before
+`task.target.dispatch(task)`.
+
+### Concurrent scheduling
+
+`HorusWorkflow` does not execute the plan serially. It runs a **ready-set
+scheduler**: on every iteration it recomputes which tasks have all their
+dependencies satisfied and dispatches all of them at once, then reacts to each
+completion to unblock newly-ready downstream tasks. Independent branches of the
+DAG therefore run concurrently, and the run reacts to actual completion order
+rather than a fixed topological sort.
+
+`max_concurrency` (a `BaseWorkflow` field, `None` = unbounded) caps the number
+of genuinely concurrent dispatches. A single-slot target reused across several
+placements does not serialize them: when the exact target instance a ready task
+declares is already busy, the scheduler hands out an idle `target.model_copy()`
+clone instead of blocking. Cloning is a valid extra slot because targets of the
+same class share a `location_id` (the same filesystem).
+
+Fail-fast is preserved: the first task to raise cancels every task still in
+flight, awaits their unwind, and re-raises, so `run()` still marks the workflow
+`FAILED`. (A workflow can opt out of fail-fast; see `failure_policy`.)
 
 ## Example
 
@@ -301,8 +370,11 @@ transfer. A workflow raises:
   `target_input` that the target task does not declare, a `source_output` that
   the source task does not produce, or a root `source_output` that no root
   artifact declares;
-- `DuplicateEdgeTargetError` if two edges feed the same
-  `(target, target_input)` — each consumer input may be fed by at most one edge.
+- `DuplicateEdgeTargetError` if two **transferring** edges feed the same
+  `(target, target_input)`: each consumer input may be fed by at most one
+  `transfer=True` edge. Ordering-only (`transfer=False`) edges are exempt, since
+  they route no data (see
+  [Ordering-only edges](#ordering-only-edges-transferfalse)).
 
 ### Trigger IDs
 
@@ -325,6 +397,51 @@ upstream work is not redundantly recomputed.
 Passing a `trigger_id` that does not correspond to a task in the workflow raises
 `UnknownTaskError` (from `execution_plan`). `HorusWorkflow._run` likewise rejects
 an unknown trigger before planning.
+
+## Mutating the DAG at runtime
+
+A workflow's graph is normally fixed at construction time, but it can also be
+grown while the workflow is **running**. Because the scheduler recomputes the
+ready set from `self.tasks` and `self.edges` on every iteration, tasks and edges
+added mid-run are picked up automatically, with no scheduler restart.
+
+`BaseWorkflow` exposes four mutators:
+
+- **`add_artifact(artifact)`**: register a standalone root artifact. Its root id
+  must be unique among the existing roots.
+- **`add_task(task)`**: append a task. Its id must be unique, its input and
+  output ids unique within the task, and it is anchored to the run directory
+  exactly like a construction-time task.
+- **`add_edge(edge)`**: append an edge. Its endpoints must resolve, at most one
+  transferring edge may feed a given `(target, target_input)`, and the edge must
+  not introduce a cycle.
+- **`expand(tasks=[...], edges=[...], artifacts=[...])`**: a transactional
+  batch. The whole batch is validated against the post-batch graph (unique ids,
+  edge resolution, no cycle) and committed all-or-nothing. Edges in the batch
+  may reference tasks or artifacts added in the same batch.
+
+Each mutator uses **incremental** validation that mirrors the construction-time
+model validators (unique ids, endpoint resolution, cycle rejection) rather than
+re-validating the whole model, and reuses the same typed errors:
+`TaskIdsAreNotUniqueError`, `ArtifactIdsAreNotUniqueError`,
+`UnknownEdgeEndpointError`, `DuplicateEdgeTargetError`, and
+`CyclicDependencyError`.
+
+### Reaching the live workflow from a task
+
+A running task reaches the workflow it belongs to through the run context:
+
+```python
+from horus_runtime.context import HorusContext
+
+wf = HorusContext.get_context().workflow
+wf.expand(tasks=[...], edges=[...])
+```
+
+The same workflow is also available as `task.workflow`. This is the seam the
+built-in fan-out / fan-in (map) and loop constructs use to grow the graph while
+it runs: a task computes how many clones it needs, then commits them and their
+wiring in a single `expand(...)`.
 
 ## Registering Custom Workflows
 
