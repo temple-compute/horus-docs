@@ -131,11 +131,11 @@ producer output to one consumer input:
 
 ```python
 class WorkflowEdge(BaseModel):
-    source: str          # producer task id, or "artifact-<rootId>" for a root
-    source_output: str   # output artifact id on the source (or the root id)
-    target: str          # consumer task id
-    target_input: str    # input artifact id on the consumer task
-    transfer: bool = True # False for an ordering-only edge (see below)
+    source: str                # producer task id, or "artifact-<rootId>" for a root
+    source_output: str | None  # output artifact id on the source (or the root id)
+    target: str                # consumer task id
+    target_input: str | None   # input artifact id on the consumer task
+    transfer: bool = True      # False for an ordering-only edge (see below)
 ```
 
 A `source` that names a task declares a **dependency**: the source task must
@@ -189,6 +189,28 @@ may feed the same input.
 
 The declarative fan-out / fan-in (map) construct is built on ordering-only
 edges.
+
+### Edges that name no artifacts
+
+`transfer=False` still requires `source_output` and `target_input` to name
+declared artifacts, so it cannot order a task that declares none. Both ids are
+optional for exactly that case:
+
+```python
+WorkflowEdge(source="prep", target="cleanup")   # prep before cleanup, nothing named
+```
+
+Naming neither id **forces `transfer=False`**: an edge with nothing on either
+end has nothing to carry. `transfer` therefore remains the single question every
+consumer asks ("does this edge supply a transfer source?"), and no caller has to
+re-derive the answer from the ids. Since such an edge feeds no input, the
+[one edge per `(target, target_input)`](#edge-validation) rule cannot apply to
+it either: any number may point at the same task.
+
+Name both ids or neither. Naming exactly one raises `IncompleteEdgeError` at
+construction rather than silently degrading a data edge into an ordering-only
+one. The `source` must resolve to a real task — a root artifact
+(`artifact-<rootId>`) is not a task and so has nothing to order against.
 
 ### Kind metadata
 
@@ -374,7 +396,15 @@ transfer. A workflow raises:
   `(target, target_input)`: each consumer input may be fed by at most one
   `transfer=True` edge. Ordering-only (`transfer=False`) edges are exempt, since
   they route no data (see
-  [Ordering-only edges](#ordering-only-edges-transferfalse)).
+  [Ordering-only edges](#ordering-only-edges-transferfalse)). `add_edge` applies
+  this rule exactly as workflow construction does;
+- `IncompleteEdgeError` if an edge names one endpoint artifact id but not the
+  other. An edge names both (it may carry data) or neither (it only orders its
+  two tasks — see [Edges that name no artifacts](#edges-that-name-no-artifacts));
+  anything between is a typo that would otherwise silently drop a transfer.
+
+An edge that names no artifacts is still validated: `source` and `target` must
+be real tasks. Only the artifact-id checks are skipped, because there are none.
 
 ### Trigger IDs
 
