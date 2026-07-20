@@ -1,0 +1,157 @@
+---
+sidebar_position: 6.5
+title: Packaging workflows
+---
+
+# Packaging workflows
+
+A workflow directory is already self-contained: every relative path in the YAML
+resolves against the directory holding it. `horus package` turns that directory
+into a zip carrying only the files the workflow actually references, so you can
+move it to a machine that never had your repo — hand it to a colleague, attach
+it to a ticket, or upload it to a web UI that then runs it for you.
+
+:::note "Package" means three different things in these docs
+`horus package` is a CLI command that zips a workflow. It is not the artifact
+transport step `package()` / `unpackage()` described in
+[Artifact](../sdk/core/artifact.md) and [Transfer](../sdk/core/transfer.md),
+which builds a single transferable file for one artifact during a run. It is
+also unrelated to Python packaging, the `pip install` sense of the word used in
+[Installation](./installation.md) and [Extending Horus](./extending.md).
+:::
+
+## From a YAML file
+
+```bash
+horus package WORKFLOW.yaml
+```
+
+Horus loads the workflow the same way `horus run` does, works out which files it
+references, and writes them into a zip. The command prints one line per file
+written, prefixed with `+`, then the archive path and a file count. It exits
+non-zero if a file the workflow needs is missing.
+
+### Options
+
+| Option | Default | What it does |
+|--------|---------|--------------|
+| `-o`, `--output OUT.zip` | `<workflow-dir-name>.zip` beside the workflow | Write the archive somewhere else, under a name of your choosing. |
+
+```bash
+# Bundle pipeline.yaml, writing ./my-pipeline/my-pipeline.zip
+horus package my-pipeline/pipeline.yaml
+
+# Choose the archive name and location
+horus package my-pipeline/pipeline.yaml -o /tmp/handoff.zip
+```
+
+## What ends up in the zip
+
+The workflow YAML is always written to the root of the archive under the fixed
+name `workflow.yaml`, whatever it was called on your disk. That way whoever
+receives the zip can find the definition without guessing your filename.
+
+Alongside it travel, at paths relative to the workflow's directory:
+
+- Every **external input artifact** — an artifact whose path no task declares as
+  an output. These are the files the workflow reads but never writes, so they
+  have to come with it. See
+  [Artifacts: inputs and outputs](./writing-workflows-yaml.mdx#artifacts-inputs-and-outputs).
+- Every `python_script` runtime's **`script`**, the local `.py` file that
+  runtime ships to its target.
+- Every executor's **`environment_file`**, if the executor you are using has one
+  (a conda-style executor, for instance).
+
+Anything a task declares as an `outputs` entry is left out. That is run output:
+it gets regenerated on the machine that runs the workflow, so shipping it would
+be pointless and often enormous. Note that this is a structural rule, not a list
+of banned filenames — run-output directories are excluded because some task
+claims them as outputs, not because they are called `horus-out` or anything
+else.
+
+Folder artifacts are expanded into their individual files. While expanding, the
+`.venv`, `__pycache__`, `.git`, `.mypy_cache`, and `.ruff_cache` directories are
+skipped, so a folder input that happens to sit next to a virtualenv does not
+drag it along.
+
+:::note Absolute paths are skipped
+A path like `/data/reference/genome.fa` names a location on *your* machine. It
+cannot travel in a zip and Horus does not try, so it is silently left out.
+Anything you want packaged must be referenced by a relative path.
+:::
+
+## Missing files: errors versus warnings
+
+Horus treats the two categories of file differently, because it knows more about
+one than the other.
+
+A missing **script** or **environment file** is a hard error. You authored those
+paths and nothing in a run ever creates them, so a missing one is simply a
+broken workflow. `horus package` fails immediately rather than handing you a zip
+that cannot run.
+
+A missing **input artifact** is only reported, and the command still succeeds:
+
+```text
+  - map_step.gathered (not found; assumed generated)
+```
+
+The reason is that not every input path exists before a run. A plugin may pin a
+path into the run directory as it expands the graph — a `map:` task, for
+example, generates `<task_id>.gathered` and `<task_id>.over.marker`, whose
+existence cannot be known ahead of time. See
+[Fan-out and fan-in](./fan-out-fan-in.mdx) for what `map:` produces. So Horus
+tells you what it left out and lets you judge whether it mattered.
+
+:::tip Read the `-` lines before you send the zip
+Every `-` line is a file that was *not* packaged. Usually that is fine, because
+the run will generate it. If you recognize one as a real input you meant to
+ship, check whether its path is absolute or whether you simply forgot to create
+it.
+:::
+
+## Referencing a file that never leaves the target
+
+Sometimes you do not want a file to travel at all, because the machine that runs
+the workflow already has it — or will have it, because Horus itself puts it
+there. For those cases, `python_script`'s `script:` and an executor's
+`environment_file:` also accept a `${artifact_id}` template naming an input
+artifact of the same task:
+
+```yaml
+tasks:
+  - id: analyze
+    inputs:
+      - { kind: file, id: analysis_script, path: "./analyze.py" }
+      - { kind: file, id: dataset, path: "./data.csv" }
+    runtime:
+      kind: python_script
+      script: ${analysis_script}
+      args: "$dataset"
+```
+
+Written this way, the script is whatever the transfer layer already placed on
+the target as the `analysis_script` artifact. The machine running Horus never
+needs a copy of the file on its own filesystem — which is exactly how a workflow
+imported from a zip runs on a server that only ever saw the archive.
+
+Plain relative paths keep working unchanged and still resolve against the
+workflow's directory:
+
+```yaml
+runtime:
+  kind: python_script
+  script: ./analyze.py
+```
+
+## After you unzip
+
+The archive expands into a directory with `workflow.yaml` at its root and every
+referenced file in its original relative position. Run it exactly as you would
+any other workflow:
+
+```bash
+horus run workflow.yaml
+```
+
+See [Running workflows](./running-workflows.md) for the options that accepts.
