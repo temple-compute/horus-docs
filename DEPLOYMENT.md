@@ -57,11 +57,24 @@ It needs two repository secrets (**Settings → Secrets and variables → Action
 | `CLOUDFLARE_API_TOKEN` | Cloudflare dashboard → My Profile → API Tokens → Create Token |
 | `CLOUDFLARE_ACCOUNT_ID` | Workers & Pages overview page, right-hand sidebar |
 
-The API token needs these permissions:
+When creating the token, select the **Edit Cloudflare Workers** template from the **Custom**
+dropdown rather than assembling permissions by hand. It covers script upload and the static-asset
+upload OpenNext performs; hand-picked permission sets usually end up one scope short.
 
-- **Account → Workers Scripts → Edit**
-- **Account → Account Settings → Read**
-- **Account → Workers R2 Storage → Edit** (only if you enable R2 incremental caching, see below)
+Add these only if they apply:
+
+- **Zone → DNS → Edit**, if you attach the custom domain via wrangler instead of the dashboard.
+- **Account → Workers R2 Storage → Edit**, if you enable R2 incremental caching (see below).
+
+Tokens are shown once, and use a `cfut_` prefix. To check one before trusting CI with it:
+
+```bash
+curl -s https://api.cloudflare.com/client/v4/user/tokens/verify \
+  -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"
+```
+
+`success: true` means the token is valid but says nothing about its scopes; a scope problem shows
+up later as `Authentication error [code: 10000]` during deploy.
 
 `.github/workflows/test.yml` runs `bun run build` on pull requests, so MDX and type errors are
 caught before merge.
