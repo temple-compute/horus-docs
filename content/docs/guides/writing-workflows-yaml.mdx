@@ -226,6 +226,94 @@ Name **both** artifact ids or **neither**. Naming only one is an error
 mistyped data edge cannot quietly stop transferring. The `source` must still be
 a real task: a root artifact (`artifact-<rootId>`) has nothing to order against.
 
+## Subworkflows
+
+A task can embed a whole child workflow instead of running a single command.
+The child is inlined into the parent's DAG rather than run as an opaque
+sub-process, so its individual tasks show up in the dashboard and its
+artifacts are ordinary artifacts.
+
+```yaml
+tasks:
+  - id: sub
+    sub:
+      kind: horus_workflow
+      name: child
+      artifacts:
+        - { kind: file, id: seed, path: seed_in.txt }
+      tasks:
+        - id: upper
+          name: Uppercase
+          kind: horus_task
+          target: { kind: local }
+          runtime: { kind: command, command: "tr a-z A-Z < $seed > $upped" }
+          executor: { kind: shell }
+          inputs:  [ { kind: file, id: seed,  path: seed_in.txt } ]
+          outputs: [ { kind: file, id: upped, path: upped.txt } ]
+        - id: report
+          name: Report
+          kind: horus_task
+          target: { kind: local }
+          runtime: { kind: command, command: "cat $upped > $report_out" }
+          executor: { kind: shell }
+          inputs:  [ { kind: file, id: upped,      path: upped.txt } ]
+          outputs: [ { kind: file, id: report_out, path: report.txt } ]
+      edges:
+        - { source: artifact-seed, source_output: seed, target: upper, target_input: seed }
+        - { source: upper, source_output: upped, target: report, target_input: upped }
+```
+
+The `sub:` key holds a complete child workflow document. It lowers to a native
+`kind: subworkflow` task (`body: <the sub: document>`) before the rest of the
+schema is parsed, so `port_overrides`, `max_depth`, and `target` are written as
+sibling keys of `sub:`, not inside it. `to_yaml` always dumps the native
+`kind: subworkflow` form, never the `sub:` sugar.
+
+### Ports: how data crosses the boundary
+
+There is no binding table to fill in — the interface is derived from the
+child itself:
+
+- **In-ports** are the child's own root `artifacts`. From the parent's side,
+  feed one by name through the subworkflow task's `inputs`, exactly like any
+  other task input (`seed` above).
+- **Out-ports** are child outputs that no inner edge consumes, named by
+  artifact id (or `taskid.artifactid` if two leaves happen to share an id).
+  `report_out` above is the child's only out-port.
+- `port_overrides: { derived_name: parent_facing_name }` renames a port for
+  the parent-facing schema.
+
+Each port is backed by a placeholder artifact so the subworkflow task looks
+like an ordinary task to the parent DAG. Edges that cross the boundary must be
+[ordering-only](#ordering-only-edges) (`transfer: false`); a transferring edge
+across the boundary raises `SubworkflowError`. When you use the `sub:` sugar,
+any boundary edge you write is downgraded to ordering-only automatically, and
+the real data edge is rewired directly to the inlined inner task at
+validation time — you never bind to the placeholder yourself.
+
+### Nesting
+
+Inlined task and edge ids are prefixed `<subId>/<innerId>`, and this nests
+naturally for subworkflows within subworkflows (`outer/inner/report`). Inner
+ids may not themselves contain `/`, since that prefix is reserved.
+
+`max_depth` (default `10`) caps how deeply subworkflows may nest, so a body
+that embeds itself fails fast with `SubworkflowError` instead of expanding
+forever. The child is otherwise validated exactly like a top-level workflow:
+duplicate ids, unresolved edges, and cycles are all rejected the same way.
+
+<Callout type="info">
+
+Using a subworkflow as a `map:` template works, but fan-in currently pins on
+the subworkflow's placeholder output rather than the real inlined producer, so
+collecting results from a mapped subworkflow does not yet work correctly.
+Each individual clone still runs fine.
+
+</Callout>
+
+The [Python guide](/guides/writing-workflows-python#subworkflows) covers the
+same feature through `wf.subworkflow(...)`.
+
 ## A complete example
 
 A multi-stage pipeline: `ingest → validate → { text features, image features }
