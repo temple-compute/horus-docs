@@ -93,7 +93,8 @@ others (fail-fast); see `failure_policy` to keep unaffected branches running.
 
 ## The live dashboard
 
-While a workflow runs, `horus run` shows a live terminal dashboard:
+While a workflow runs, `horus run` takes over the terminal with a live
+dashboard:
 
 - Header: the workflow name, its status (`RUNNING`, `COMPLETED`, `FAILED`, and
   so on), and elapsed wall-clock time.
@@ -108,6 +109,25 @@ While a workflow runs, `horus run` shows a live terminal dashboard:
 
 When a Python task
 [asks the user a question](./writing-workflows-python.mdx#prompting-the-user),
-the dashboard pauses so you can type your answer, then resumes.
+the dashboard pauses so you can type your answer, then resumes. The question and
+your answer stay in your scrollback after the run.
+
+### When the run ends
+
+The dashboard draws on the terminal's alternate screen, the same way `less` or
+`vim` do, so it does not scroll past as it redraws. When the run finishes the
+dashboard closes and the terminal returns to what it was showing before, leaving
+a single summary line behind:
+
+```text
+pipeline  ·  COMPLETED  ·  6/6 tasks  ·  1m12s
+```
+
+If the run failed, the failure panel is printed under that line, so the error
+survives after the dashboard is gone.
+
+Because the dashboard is not part of your scrollback, you cannot scroll back
+through it once the run ends. To keep a full record of a run, use `--no-tui` and
+redirect the output to a file.
 
 For plain logs (CI, redirecting to a file, or no TTY), add `--no-tui`.
