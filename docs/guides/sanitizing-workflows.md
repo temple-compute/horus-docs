@@ -1,0 +1,192 @@
+---
+sidebar_position: 6.6
+title: Sanitizing workflows
+---
+
+# Sanitizing workflows
+
+A task input that no edge feeds is a **root input**: a file you supply, rather
+than one the run produces. Horus runs such a workflow perfectly well, but the
+file is implicit, so nothing reading the YAML can tell it apart from an
+intermediate. `horus sanitize` promotes each root input to a top-level
+`artifacts:` entry wired by an edge, which is what lets a UI list it as a
+workflow input, or lets a colleague see at a glance which files they need to
+provide.
+
+## From a YAML file
+
+```bash
+horus sanitize WORKFLOW.yaml
+```
+
+Horus loads the workflow, finds the root inputs, and asks about each one in
+turn. Answer yes and it writes a **new** file, `WORKFLOW.sanitized.yaml`, with
+the promotions applied; your original is never modified. The command prints one
+`+` line per artifact and per edge it added, then the path it wrote and a count.
+
+```text
+  configs/run.yaml -> artifacts/config? [Y/n]: y
+  examples/seed.txt -> artifacts/seed? [Y/n]: y
+  + artifacts/config (configs/run.yaml)
+  + edge -> consume.config
+  + artifacts/seed (examples/seed.txt)
+  + edge -> produce.seed
+Wrote workflow.sanitized.yaml (2 root input(s))
+```
+
+Before it reports success, Horus loads the file it just wrote and validates it.
+If the result would not parse as a workflow, the command fails rather than
+leaving you with a broken YAML.
+
+### Options
+
+| Option | Default | What it does |
+|--------|---------|--------------|
+| `-o`, `--output OUT.yaml` | `<name>.sanitized.yaml` beside the workflow | Write the sanitized YAML somewhere else, under a name of your choosing. |
+| `-y`, `--yes` | off (prompts for each) | Promote every root input without asking. |
+
+```bash
+# Review each promotion, writing ./workflow.sanitized.yaml
+horus sanitize workflow.yaml
+
+# Promote everything, straight over the original
+horus sanitize workflow.yaml -y -o workflow.yaml
+```
+
+If there is nothing to do, the command says `No root inputs to promote.` and
+writes nothing. Decline every prompt and it says `Nothing promoted.` and, again,
+writes nothing. Both exit successfully.
+
+## What gets promoted
+
+A task input becomes a root input only if no edge already targets it and its
+path is relative. Take this workflow, where `produce` reads `seed.txt` and both
+tasks read `shared.yaml`:
+
+```yaml
+tasks:
+  - id: produce
+    inputs:
+      - { id: seed, kind: file, path: examples/seed.txt }
+      - { id: shared, kind: file, path: configs/shared.yaml }
+    outputs:
+      - { id: data, kind: file, path: results/data.txt }
+  - id: consume
+    inputs:
+      - { id: data, kind: file, path: results/data.txt }
+      - { id: config, kind: file, path: configs/run.yaml }
+      - { id: shared, kind: file, path: configs/shared.yaml }
+edges:
+  - source: produce
+    source_output: data
+    target: consume
+    target_input: data
+```
+
+`consume.data` is skipped: an edge already feeds it. The other three are root
+inputs, and sanitizing adds an artifact and an edge for each:
+
+```yaml
+artifacts:
+  - id: config
+    kind: file
+    path: configs/run.yaml
+
+  - id: shared
+    kind: file
+    path: configs/shared.yaml
+
+  - id: seed
+    kind: file
+    path: examples/seed.txt
+
+edges:
+  - source: produce
+    source_output: data
+    target: consume
+    target_input: data
+
+  - source: artifact-config
+    source_output: config
+    target: consume
+    target_input: config
+
+  # ... and one for each of shared and seed
+```
+
+Root inputs are handled in path order, which is why `config` comes first here
+despite appearing last in the tasks.
+
+The `artifact-` prefix on `source` is how an edge names a top-level artifact
+rather than a task. The artifact id is taken from the input's own id where that
+is free, so `seed` stays `seed`; where the name is already taken it falls back to
+`<task_id>_<input_id>`, and then to a slug of the path.
+
+**Task `inputs:` are left exactly as they were.** That matters: `${seed}` in a
+task's command still resolves against the task input it always did, so
+sanitizing never breaks a command substitution.
+
+## Shared paths become one artifact
+
+`configs/shared.yaml` is read by both tasks above, but it is one file, so it
+becomes **one artifact with one edge per consumer**:
+
+```yaml
+  - source: artifact-shared
+    source_output: shared
+    target: produce
+    target_input: shared
+
+  - source: artifact-shared
+    source_output: shared
+    target: consume
+    target_input: shared
+```
+
+You are prompted once for it, not once per task.
+
+## Missing edges are reported, not fixed
+
+If an unwired input's path is one that another task declares as an *output*,
+it is not a root input at all: it is a file the run produces, consumed without a
+dependency edge saying so. Horus points it out and moves on.
+
+```text
+  ! consume.data -> results/data.txt produced by produce; missing edge
+```
+
+It will not repair this for you, because there are two different bugs with the
+same shape and only you know which one it is. Either you forgot the edge, and
+the fix is to add it, or the path is a typo that happens to collide with real
+run output, and the fix is to correct the path. Guessing wrong would silently
+reorder your workflow.
+
+:::note Absolute paths are skipped
+A path like `/data/reference/genome.fa` names a location on *your* machine. It
+cannot travel to another one, so Horus does not offer to declare it as a
+workflow input. Same rule the packaging step applies, for the same reason: see
+[Packaging workflows](./packaging-workflows.md).
+:::
+
+:::tip Comments and anchors survive
+Sanitizing edits the YAML text by appending to it, rather than re-serializing
+the workflow model. Your comments, your `&anchors` and `*aliases`, your key
+order, and your relative paths all come through untouched. Diff the sanitized
+file against the original and you will see only added lines.
+:::
+
+Sanitizing needs a top-level `edges:` block to append to. A workflow that has no
+`edges:` key at all fails with an error rather than growing one.
+
+## Where this fits
+
+Sanitize before you hand a workflow off. [`horus package`](./packaging-workflows.md)
+zips the files either way, but undeclared inputs arrive unlabelled, so whoever
+receives the zip cannot tell which files are theirs to replace. Once the YAML
+validates, run it as usual:
+
+```bash
+horus run workflow.sanitized.yaml
+```
+
+See [Running workflows](./running-workflows.md) for the options that accepts.
