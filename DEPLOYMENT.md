@@ -66,15 +66,21 @@ Add these only if they apply:
 - **Zone → DNS → Edit**, if you attach the custom domain via wrangler instead of the dashboard.
 - **Account → Workers R2 Storage → Edit**, if you enable R2 incremental caching (see below).
 
-Tokens are shown once, and use a `cfut_` prefix. To check one before trusting CI with it:
+Tokens are shown once. User tokens (My Profile) use a `cfut_` prefix; account tokens (Manage
+Account) use `cfat_`. Either works for CI.
+
+To check a token before trusting CI with it, call an **account**-scoped endpoint:
 
 ```bash
-curl -s https://api.cloudflare.com/client/v4/user/tokens/verify \
+curl -s "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts" \
   -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"
 ```
 
-`success: true` means the token is valid but says nothing about its scopes; a scope problem shows
-up later as `Authentication error [code: 10000]` during deploy.
+Do *not* use `/user/tokens/verify` for this. It is user-scoped and returns `Invalid API Token`
+for a perfectly good account token, which is a misleading false negative.
+
+A listing means the token authenticates and can read Workers. It does not prove write access; a
+missing edit scope surfaces later as `Authentication error [code: 10000]` during deploy.
 
 `.github/workflows/test.yml` runs `bun run build` on pull requests, so MDX and type errors are
 caught before merge.
