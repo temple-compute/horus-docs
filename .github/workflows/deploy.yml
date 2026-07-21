@@ -9,6 +9,9 @@ concurrency:
     group: deploy
     cancel-in-progress: true
 
+permissions:
+    contents: read
+
 jobs:
     deploy:
         name: Build and deploy
