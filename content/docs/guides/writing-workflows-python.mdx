@@ -192,5 +192,88 @@ The answer is validated and coerced to the right type: `str` for
 parsed prompts again. To add your own interaction types, see the
 [Interaction reference](/sdk/core/interaction).
 
+## Subworkflows
+
+`wf.subworkflow(id=, body=, port_overrides=None, max_depth=None, name=None,
+target=None)` inlines another workflow into `wf` as a single task. `body` is
+a child `HorusWorkflow`, built the same way as any top-level workflow:
+
+```python
+from pathlib import Path
+
+from horus_builtin.artifact.file import FileArtifact
+from horus_builtin.event.tui_subscriber import render_workflow
+from horus_builtin.executor.shell import ShellExecutor
+from horus_builtin.runtime.command import CommandRuntime
+from horus_builtin.target.local import LocalTarget
+from horus_builtin.task.horus_task import HorusTask
+from horus_builtin.workflow.horus_workflow import HorusWorkflow
+from horus_runtime.context import HorusContext
+from horus_runtime.core.workflow.edge import WorkflowEdge
+
+HorusContext.boot()
+
+work = LocalTarget(working_directory="./horus-work")
+
+
+def _shell_task(task_id, command, *, inputs=None, outputs=None):
+    return HorusTask(
+        id=task_id,
+        name=task_id,
+        runtime=CommandRuntime(command=command),
+        executor=ShellExecutor(),
+        target=work,
+        inputs=inputs or [],
+        outputs=outputs or [],
+    )
+
+
+# The child is an ordinary workflow: a root artifact feeding two tasks.
+child = HorusWorkflow(
+    name="child",
+    artifacts=[FileArtifact(id="seed", path=Path("seed_in.txt"))],
+    tasks=[
+        _shell_task(
+            "upper",
+            "tr a-z A-Z < $seed > $upped",
+            inputs=[FileArtifact(id="seed", path=Path("seed_in.txt"))],
+            outputs=[FileArtifact(id="upped", path=Path("upped.txt"))],
+        ),
+        _shell_task(
+            "report",
+            "cat $upped > $report_out",
+            inputs=[FileArtifact(id="upped", path=Path("upped.txt"))],
+            outputs=[FileArtifact(id="report_out", path=Path("report.txt"))],
+        ),
+    ],
+    edges=[
+        WorkflowEdge(
+            source="artifact-seed", source_output="seed",
+            target="upper", target_input="seed",
+        ),
+        WorkflowEdge(
+            source="upper", source_output="upped",
+            target="report", target_input="upped",
+        ),
+    ],
+)
+
+wf = HorusWorkflow(name="parent")
+wf.subworkflow(id="sub", body=child)
+
+if __name__ == "__main__":
+    render_workflow(wf, trigger_id="sub")
+```
+
+Ports work exactly as in YAML: in-ports are the child's root `artifacts`,
+out-ports are its unconsumed leaf outputs (here, `seed` in and `report_out`
+out), and `port_overrides={"derived_name": "parent_facing_name"}` renames one.
+Wire a parent task to a port with a normal `WorkflowEdge`, but set
+`transfer=False` since the edge crosses the subworkflow boundary — the real
+data edge gets rewired directly to the inlined inner task at validation time.
+Inlined tasks are reachable afterwards by their prefixed id, e.g.
+`sub/report`. See [Subworkflows](/guides/writing-workflows-yaml#subworkflows)
+for the full rules on ports, nesting, and `max_depth`.
+
 Next, [Running workflows](/guides/running-workflows) covers the CLI and the live
 dashboard.
