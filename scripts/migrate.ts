@@ -104,7 +104,12 @@ const CALLOUT_TYPE: Record<string, string> = {
 function titleAttr(raw: string): string {
   const title = raw.trim();
   if (!title) return '';
-  if (!title.includes('`')) return ` title=${JSON.stringify(title)}`;
+  if (!title.includes('`')) {
+    const s = JSON.stringify(title);
+    // A title containing `"` cannot sit in a quoted JSX attribute (the escapes
+    // would be literal backslashes); pass it as an expression instead.
+    return title.includes('"') ? ` title={${s}}` : ` title=${s}`;
+  }
   const esc = (s: string) =>
     s.replace(/[<>{}]/g, (c) => `{'${c}'}`);
   const jsx = title

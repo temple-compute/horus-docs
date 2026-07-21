@@ -38,8 +38,14 @@ local, in-process targets.
 - Declare compatible runtime types via `runtimes`
 - Implement `_execute()`, not `execute()`
 - `execute()` is the public `final` entry point: it creates
-  `task.side_artifacts_dir` **through the target's channel**
-  (`await task.target.mkdir(...)`), runs `ExecutorMiddleware`, calls
+  `task.side_artifacts_dir` and the **containing directory of every declared
+  output** — tasks write their outputs themselves (a shell command redirecting
+  to `${artifact}` never goes through `Artifact.write`), so the directory must
+  exist first. Both go **through the target's channel**
+  (`await task.target.mkdir(...)`), so they work on local and remote targets
+  alike. Only each output's parent is created, never its own `path`: a
+  `FolderArtifact` whose path exists reports `exists()`, which would make the
+  task count as complete and skip forever. Then it runs `ExecutorMiddleware`, calls
   `_execute()`, then collects side artifacts. Collection is **channel-based**:
   `collect_side_artifacts()` lists the directory with `list_dir` and pulls each
   file/folder back to a local temp dir with `get_file`, so it works on local

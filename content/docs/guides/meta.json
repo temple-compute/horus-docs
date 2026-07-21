@@ -10,6 +10,8 @@
     "fan-out-fan-in",
     "loops",
     "running-workflows",
+    "packaging-workflows",
+    "sanitizing-workflows",
     "examples",
     "extending"
   ]

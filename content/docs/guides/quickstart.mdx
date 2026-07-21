@@ -22,7 +22,7 @@ tasks:
     target: { kind: local, working_directory: "./horus-work" }
     runtime:
       kind: command
-      command: "mkdir -p \"$$(dirname $message)\"\necho 'Hello from Horus!' > $message\n"
+      command: "echo 'Hello from Horus!' > $message\n"
     executor:
       kind: shell
     outputs:
@@ -45,9 +45,10 @@ What each piece means:
 horus run hello.yaml
 ```
 
-A live dashboard appears while the workflow runs, with a progress bar, a task
-table, the dependency graph, and a log pane. When the task finishes it turns
-green (`✓`).
+A live dashboard takes over the terminal while the workflow runs, with a
+progress bar, a task table, the dependency graph, and a log pane. The task turns
+green (`✓`) once it completes. When the run ends the dashboard closes and leaves
+a one-line summary behind.
 
 ## 3. Check the result
 
