@@ -74,6 +74,13 @@ Folder artifacts are expanded into their individual files. While expanding, the
 skipped, so a folder input that happens to sit next to a virtualenv does not
 drag it along.
 
+:::note Undeclared inputs travel, but arrive unlabelled
+If `horus package` ends by telling you the workflow has undeclared root inputs,
+the files are still in the zip. What is missing is the declaration saying they
+are yours to supply, so a UI importing the archive cannot offer them as inputs.
+[`horus sanitize`](./sanitizing-workflows.md) adds it.
+:::
+
 :::note Absolute paths are skipped
 A path like `/data/reference/genome.fa` names a location on *your* machine. It
 cannot travel in a zip and Horus does not try, so it is silently left out.

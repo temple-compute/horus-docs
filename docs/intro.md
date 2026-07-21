@@ -29,6 +29,8 @@ shows live progress in your terminal.
   the live dashboard.
 - [Packaging workflows](guides/packaging-workflows.md): the `horus package`
   command, which zips a workflow and its inputs so it can run elsewhere.
+- [Sanitizing workflows](guides/sanitizing-workflows.md): the `horus sanitize`
+  command, which declares a workflow's implicit inputs so a UI can offer them.
 
 ## Building on Horus
 
