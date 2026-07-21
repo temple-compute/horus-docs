@@ -27,6 +27,8 @@ shows live progress in your terminal.
   that need real logic or user prompts.
 - [Running workflows](guides/running-workflows.md): the `horus run` command and
   the live dashboard.
+- [Packaging workflows](guides/packaging-workflows.md): the `horus package`
+  command, which zips a workflow and its inputs so it can run elsewhere.
 
 ## Building on Horus
 

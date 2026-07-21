@@ -133,6 +133,10 @@ artifact's own path unchanged for single-file, identity artifacts);
 `unpackage()` runs `unpack_command` on the destination, or simply moves the file
 into place for identity artifacts.
 
+This `package()` is unrelated to the `horus package` CLI command, which zips a
+whole workflow for transport — see
+[Packaging workflows](../../guides/packaging-workflows.md).
+
 `ArtifactStore` depends only on a small set of methods
 (`path_on_target`, `path_exists`, `remove`, `run_command_sync`,
 `resolved_working_directory`) that `BaseTarget` satisfies. See
