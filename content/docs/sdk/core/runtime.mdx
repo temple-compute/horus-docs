@@ -1,0 +1,127 @@
+---
+title: Runtime
+---
+
+# Runtime System
+
+Runtimes describe what should be executed. They prepare the payload that an
+executor will consume after the task has been dispatched to a target.
+
+In practice, a runtime can prepare a shell command, a Python callable, a Python
+code string, or any other executor-specific payload.
+
+## Core Concept
+
+Every runtime implements an internal setup hook:
+
+```python
+async def _setup_runtime(self, task: BaseTask) -> T:
+    """
+    Prepare the runtime payload that an executor will consume.
+    """
+```
+
+### Contract
+
+- Return a payload of type `T` that the paired executor understands
+- Use task context when needed to format or prepare the payload
+- Implement `_setup_runtime()`, not `setup_runtime()`
+- `setup_runtime()` is the public `final` entry point and runs `RuntimeMiddleware`
+- Use `kind: str` as the registry discriminator
+
+## Base Runtime
+
+All runtimes inherit from `BaseRuntime[T]`:
+
+```python
+class BaseRuntime[T: Any = Any](AutoRegistry, entry_point="runtime"):
+    registry_key: ClassVar[str] = "kind"
+    kind: str
+    kind_name: ClassVar[str] = "Runtime"
+    kind_description: ClassVar[str] = _("Base runtime")
+
+    @abstractmethod
+    async def _setup_runtime(self, task: BaseTask) -> T:
+        """Subclass hook that prepares the runtime payload."""
+
+    @final
+    async def setup_runtime(self, task: BaseTask) -> T:
+        """Public entry point wrapped by runtime middleware."""
+        ...
+```
+
+The generic return type is intentionally flexible. This allows Horus runtimes
+to return more than strings, such as Python callables for in-process execution.
+
+When `setup_runtime()` is called, Horus wraps the call in
+`RuntimeMiddleware.call_with_middleware(...)` before delegating to
+`_setup_runtime()`. See [Middleware Overview](/sdk/plugin-system/middleware/overview).
+
+### Kind metadata
+
+Runtimes may provide `kind_name` and `kind_description` ClassVars to surface
+user-friendly names and translatable descriptions. For `kind_description`,
+use a plugin-scoped translator created with `make_translator` (typically
+aliased as `_`).
+
+## Built-in Runtimes
+
+- `CommandRuntime`: formats and returns a shell command string
+- `PythonFunctionRuntime`: stores a Python callable and prepares a tuple of
+  `(callable, kwargs)` for execution
+- `PythonCodeStringRuntime`: returns a Python code string for in-process
+  execution with `exec()`
+
+## Example
+
+```python
+from horus_builtin.runtime.command import CommandRuntime
+
+runtime = CommandRuntime(
+    command="cp ${input_file.path} ${task.name}.bak",
+)
+```
+
+`CommandRuntime` formats placeholders from:
+
+- `task`
+- declared input artifacts, addressed by `artifact.id` (e.g. `${input_file.path}`
+  resolves the input whose `id` is `input_file`)
+- declared output artifacts, addressed by `artifact.id`
+- task fields available to the runtime implementation
+
+See [Artifact Substitution](/sdk/core/artifact-substitution) for the placeholder
+syntax across every runtime (`$id` / `${id.path}` for all string-templating
+runtimes).
+
+## Python-Native Runtime Examples
+
+```python
+from horus_builtin.runtime.python import PythonFunctionRuntime
+from horus_builtin.runtime.python_string import PythonCodeStringRuntime
+
+runtime1 = PythonFunctionRuntime(func=lambda: print("hello from python"))
+
+runtime2 = PythonCodeStringRuntime(
+    code="result = 1 + 1\nprint(result)"
+)
+```
+
+`PythonFunctionRuntime` builds keyword arguments from:
+
+- `task`
+- declared input and output artifacts, keyed by `artifact.id`
+
+When the callable does not declare `**kwargs`, `PythonFunctionRuntime`
+validates during `_setup_runtime()` that every declared function parameter can
+be satisfied from that context and raises a `ValueError` for missing names.
+
+## Registering Custom Runtimes
+
+To register runtime plugins, expose them through:
+
+```toml
+[project.entry-points."horus.runtime"]
+```
+
+For more details, refer to the [Auto-Registry documentation](/sdk/plugin-system/autoregistry).

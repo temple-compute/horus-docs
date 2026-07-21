@@ -1,0 +1,81 @@
+---
+title: Core concepts
+---
+
+# Core concepts
+
+Horus is built on a small set of ideas. Once they are familiar, both YAML and
+Python workflows read naturally.
+
+## Workflow
+
+A workflow is a named collection of tasks plus the edges that connect them. The
+runtime runs the tasks as a directed acyclic graph (DAG). It does not follow the
+order you list them in; it follows the order the edges imply.
+
+## Task
+
+A task is one unit of work. Every task brings together three things:
+
+| Piece | Question it answers | Examples |
+|-------|---------------------|----------|
+| Runtime | What runs? | a shell `command`, a `python` snippet, a `python_script` |
+| Executor | How does it run? | `shell` (subprocess), `python` (in-process) |
+| Target | Where does it run? | `local` (this machine) |
+
+A task also declares its inputs and outputs (artifacts), an optional resources
+request, and an `id` that is unique within the workflow.
+
+## Artifact
+
+An artifact is a file (or folder, JSON, or pickle) that a task consumes or
+produces. Outputs are how Horus knows a task is done: if a task's declared
+outputs already exist, it is skipped on the next run, unless you set
+`skip_if_complete: false`. Artifacts are also the data passed between tasks.
+
+In a command you reference an artifact's path with `$id` substitution. For
+example, `echo hi > $result` writes to the artifact whose id is `result`. See
+[artifact substitution](/sdk/core/artifact-substitution) for the full
+syntax.
+
+## Edge
+
+An edge wires one task's output to another task's input:
+
+```yaml
+edges:
+  - { source: prep, source_output: data, target: train, target_input: data }
+```
+
+Edges are the single source of truth for the DAG:
+
+- An edge from `prep` to `train` means `prep` runs before `train`, and its
+  output is delivered to `train`'s input.
+- A workflow with no edges has fully independent tasks and no ordering.
+
+## Trigger
+
+Every run starts from a trigger, the `id` of one task. Horus runs that task
+along with the tasks it depends on (its ancestors) and the tasks that depend on
+it (its descendants); unrelated branches are skipped. By default the trigger is
+the first task in the file.
+
+## Resources
+
+A task may declare advisory resources (`cpus`, `gpus`, `memory_gb`, `vram_gb`,
+`walltime`). Resource-aware targets such as Slurm use them to provision compute.
+The `local` target ignores them, but the dashboard still shows them.
+
+## Plugins
+
+The kinds you have seen so far (`file` artifacts, the `shell` executor, the
+`command` runtime, the `local` target, the `string` and `confirm` interactions)
+are all plugins. When the built-ins are not enough, you can add your own artifact
+types, tasks, runtimes, executors, targets, transfers, and interactions. See
+[Extending Horus](/guides/extending).
+
+---
+
+Next, put these together in [YAML](/guides/writing-workflows-yaml) or
+[Python](/guides/writing-workflows-python). For the underlying models, see the
+[SDK reference](/sdk/overview).

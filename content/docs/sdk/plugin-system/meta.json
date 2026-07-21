@@ -1,0 +1,10 @@
+{
+  "title": "Plugin System",
+  "pages": [
+    "---AutoRegistry---",
+    "autoregistry",
+    "auto-registry-product",
+    "---Middleware---",
+    "middleware"
+  ]
+}
