@@ -16,8 +16,10 @@ Every task has two filesystem properties, both **target-side path strings**
 (they live on whatever host the task runs on, which may not be the
 orchestrator):
 
-- **`working_dir`** — a per-task folder under its target's working directory
-  where inputs are materialized and outputs are written.
+- **`working_dir`** — a per-task, per-invocation folder under its target's
+  working directory where inputs are materialized and outputs are written. It
+  has the form `<working_directory>/<task id>/<execution id>`, so reruns do not
+  overwrite prior side products.
 - **`side_artifacts_dir`** — the `side-artifacts` subdirectory of `working_dir`,
   created automatically by the executor before every run.
 
