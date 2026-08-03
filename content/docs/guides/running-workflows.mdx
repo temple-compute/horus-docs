@@ -92,6 +92,12 @@ Two knobs bound the concurrency:
 A failure still fails the run. By default the first failing task cancels the
 others (fail-fast); see `failure_policy` to keep unaffected branches running.
 
+A task is marked `FAILED` whether it broke while running or during its setup —
+acquiring its target, or transferring its inputs onto that target. Setup happens
+before the task starts, so a task can be reported failed having never run: a
+remote target that refuses the connection, for instance, fails the task that was
+going to run there rather than the one that produced the inputs.
+
 ## The live dashboard
 
 While a workflow runs, `horus run` takes over the terminal with a live
