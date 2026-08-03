@@ -62,7 +62,7 @@ class BaseTask(AutoRegistry, entry_point="task"):
 
     @property
     def working_dir(self) -> str:
-        """Per-task folder under the target's working directory (target-side)."""
+        """Per-task, per-invocation folder under the target's working directory."""
         ...
 
     @property
@@ -96,6 +96,22 @@ class BaseTask(AutoRegistry, entry_point="task"):
     async def _reset(self) -> None:
         """Subclass-specific reset logic. Do not set self.status here."""
 ```
+
+## Execution working directories
+
+When a task begins, Horus creates a fresh target-side working directory for
+that invocation:
+
+```text
+<target working_directory>/<task id>/<execution id>
+```
+
+`execution id` is an opaque unique identifier. Re-running a task therefore
+never reuses the prior job's current directory, preventing relative outputs,
+uploaded scripts, side artifacts, and scheduler files from overwriting an
+earlier execution. The directory is created before the executor runs, so the
+same layout applies to local, remote, and scheduler-backed targets such as
+Slurm.
 
 Subclasses must implement `_run()`, `is_complete()`, and `_reset()`.
 

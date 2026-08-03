@@ -196,9 +196,11 @@ required.
 ### Contract
 
 - `location_id`: stable URI-like identifier for the physical location
-- `working_directory`: base directory **on the target host** where per-task
-  working directories are created. It is `str | None` and defaults to `None`;
-  read it through `resolved_working_directory`, never directly
+- `working_directory`: base directory **on the target host** where per-task,
+  per-invocation working directories are created. A task invocation uses
+  `<working_directory>/<task id>/<execution id>`, so reruns do not overwrite a
+  prior job's files. It is `str | None` and defaults to `None`; read it through
+  `resolved_working_directory`, never directly
 - `resolved_working_directory`: the base directory as a concrete path, resolved
   at use time. The base contract **raises `WorkingDirectoryNotSetError`** when
   `working_directory` is `None`; a target that can derive a sensible default
