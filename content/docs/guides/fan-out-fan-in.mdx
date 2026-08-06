@@ -156,6 +156,14 @@ independently through the ordinary `skip_if_complete` behaviour if its own outpu
 already exists. A map that was interrupted part way through therefore resumes:
 finished clones are skipped and only the remaining ones run.
 
+That holds for a **re-run from a stored snapshot** too, not only for resuming
+the same process. A snapshot taken after a previous expansion already contains
+`score[0]`, `score[1]`, … and the expander re-derives them all anyway, so the
+re-derived clones replace the stored ones rather than colliding with them. The
+fresh copy must win: its paths are pinned under the current run's root, while
+the snapshot's copy still names the previous run's directory. See
+[`expand()` supersedes what a batch re-derives](/sdk/core/workflow#expand-supersedes-what-a-batch-re-derives).
+
 ## Under the hood
 
 The clones and the gather task are wired into the live DAG with **ordering-only
@@ -164,6 +172,23 @@ edges** (`transfer: false`), committed atomically through the runtime
 the scheduler's reachable scope without letting the generic transfer step
 repoint a clone's already-materialized slice at the whole upstream collection.
 See the [workflow reference](/sdk/core/workflow) for the edge mechanism.
+
+Two consequences are worth knowing about:
+
+**The gather task is held behind the expander.** The clone → gather edges only
+come into existence once the expander has run, so nothing else orders the two.
+In any workflow where the gather task is reachable from the trigger by some
+other path, the scheduler would dispatch it alongside the expander, with its
+fan-in input not yet pinned — surfacing as `Input artifact 'results' does not
+exist`. An ordering-only `expander → gather` edge on the expander's `.fanout`
+marker prevents that. It is derived when the workflow is loaded, so stored
+workflows pick it up with no migration.
+
+**Materialized slices are marked `pinned`.** The clone slices, index files and
+the fan-in folder are written straight onto the orchestrator filesystem and have
+no producer edge. Without a marker, the transfer step would read that missing
+edge as "root input" and try to fetch data that was never uploaded. They carry
+[`pinned`](/sdk/core/artifact) instead and are skipped.
 
 Range mode is exactly a bounded, counted loop. For a loop that repeats while a
 predicate holds, see the Loops guide.

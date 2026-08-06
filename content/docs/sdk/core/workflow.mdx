@@ -447,7 +447,44 @@ added mid-run are picked up automatically, with no scheduler restart.
 - **`expand(tasks=[...], edges=[...], artifacts=[...])`**: a transactional
   batch. The whole batch is validated against the post-batch graph (unique ids,
   edge resolution, no cycle) and committed all-or-nothing. Edges in the batch
-  may reference tasks or artifacts added in the same batch.
+  may reference tasks or artifacts added in the same batch. A batch also
+  **supersedes** what it re-derives — see below.
+
+#### `expand()` supersedes what a batch re-derives
+
+`add_task` rejects a duplicate id. `expand` does not: a task in the batch whose
+id already exists **replaces** the existing one, together with every edge that
+touches that id, and a root artifact in the batch replaces an existing root of
+the same id.
+
+That asymmetry is deliberate, and it is what makes an expander re-runnable.
+Every expander re-derives its whole expansion each time it is triggered
+(`is_complete()` is hardcoded `False`), so a run resumed from a snapshot that
+already carries a previous run's expansion would otherwise collide with itself:
+
+```text
+TaskIdsAreNotUniqueError: Multiple tasks share the same ID 'score[0]'
+```
+
+The freshly derived task has to win regardless of which is "newer", because its
+paths are pinned under *this* run's root while the snapshot's copy still names
+the previous run's directory.
+
+Stale edges are dropped by **endpoint**, not by equality: an expander re-emits
+every edge touching the tasks it owns, so any edge on a superseded id is one the
+batch is about to re-state.
+
+Duplicates *within* a single batch remain an error —
+`TaskIdsAreNotUniqueError` for two tasks sharing an id, and
+`ArtifactIdsAreNotUniqueError` for two root artifacts.
+
+<Callout type="warn" title="Do not use expand() to update a task in place">
+
+Supersession replaces the task object and every edge touching it. Passing a
+partially-built task with the id of a live one silently drops that task's
+existing wiring. `expand` is for re-deriving a batch you own end to end.
+
+</Callout>
 
 Each mutator uses **incremental** validation that mirrors the construction-time
 model validators (unique ids, endpoint resolution, cycle rejection) rather than
