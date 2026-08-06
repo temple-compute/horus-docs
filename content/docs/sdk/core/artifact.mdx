@@ -90,6 +90,12 @@ class MyArtifact(BaseArtifact[str]):
 - **Kind metadata** (optional ClassVars):
   - `kind_name: ClassVar[str]`: short, human-readable name for the kind (e.g. `"File"`), used by client UIs, registries, and logging.
   - `kind_description: ClassVar[str]`: a longer description of the kind. Defaults to an empty string. For translatable text, prefer a plugin-scoped translator (see the [SDK i18n guide](/sdk/i18n)).
+- **Materialization hook** (optional):
+  - `materialize() -> None`: make the artifact's bytes available at `path`. The
+    default is a no-op — a file-backed artifact assumes a producer task, or an
+    upload, already wrote it. [Value artifacts](#value-artifacts) override it to
+    write their inline `value`, which is what lets a workflow-owned root artifact
+    run with no producer at all.
 - **Transport hooks** (override only when the artifact is not a single file):
   - `pack_command(src, pkg) -> str | None`: return a portable shell command that
     produces the single-file package `pkg` from the artifact materialized at
@@ -192,6 +198,71 @@ data = artifact.read()  # list
 > **Warning:** pickle is not secure against malformed or maliciously crafted data.
 > Never unpickle data from untrusted sources.
 
+## Value artifacts
+
+Most artifacts describe data that some task will produce. A **value artifact**
+describes data you author directly in the workflow — a sample count, a
+threshold, a feature flag — while still being a normal, file-backed artifact in
+every other respect.
+
+`ValueArtifact[T]` adds one field to `BaseArtifact[T]`:
+
+- `value: T` — the artifact's authored value. It round-trips through
+  `model_dump`, so a workflow document can carry a value whose bytes have not
+  been written yet.
+
+and overrides `materialize()` to write that value to `path`. The override is
+**idempotent**: once the file exists it is left alone, so an uploaded blob, or a
+value a producer task already wrote, is never clobbered by the declared one.
+
+The graph does not distinguish the two cases. A `NumberArtifact` produced by a
+task is transferred to its consumer exactly like a `NumberArtifact` root whose
+value you typed. The only runtime difference is that a root value artifact has
+no producer, so [`transfer_artifacts`](/sdk/core/workflow) calls `materialize()`
+on it the first time a consumer needs it — and copies the root's value onto the
+consumer's own input artifact, so that substitution sees the authored value
+rather than the field default.
+
+### `NumberArtifact`
+
+An `int | float`, materialized as a JSON number. Defaults to `0`.
+
+```python
+from horus_builtin.artifact.number import NumberArtifact
+
+samples = NumberArtifact(id="samples", path="samples.json", value=10)
+samples.materialize()
+samples.read()  # 10
+```
+
+### `BooleanArtifact`
+
+A `bool`, materialized as a JSON boolean (`true` / `false`). Defaults to `False`.
+
+```python
+from horus_builtin.artifact.boolean import BooleanArtifact
+
+verbose = BooleanArtifact(id="verbose", path="verbose.json", value=True)
+```
+
+### `StringArtifact`
+
+A `str`, materialized as plain text — the string as authored, with no quotes.
+Defaults to `""`.
+
+```python
+from horus_builtin.artifact.string import StringArtifact
+
+label = StringArtifact(id="label", path="label.txt", value="baseline")
+```
+
+`ValueArtifact` itself is abstract and is not registered as a kind; only
+`number`, `boolean` and `string` are. Subclass it to add your own — declare the
+concrete `value` type and the on-disk serialization through `read`/`write`,
+exactly as for any other artifact, and `materialize()` follows for free.
+
+Value artifacts also change how `$id` renders in a command — see
+[Artifact substitution](/sdk/core/artifact-substitution).
 
 ## Registering custom artifacts
 

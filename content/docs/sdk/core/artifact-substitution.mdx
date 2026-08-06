@@ -9,6 +9,10 @@ each reference to the artifact's path *on the target the task runs on*
 (`target.path_on_target(artifact)`). Write the body once and it runs unchanged
 whether the task lands on a local or remote target.
 
+The one exception is a [value artifact](/sdk/core/artifact#value-artifacts),
+which resolves to its **authored value** rather than its path — see
+[Value artifacts render their value](#value-artifacts-render-their-value).
+
 The **key is always the artifact `id`** — both inputs and outputs are exposed.
 All string-templating runtimes (`command`, `python_script`, `python`) now share
 a single syntax: **`string.Template`** `$`/`${}`. Using the wrong syntax leaves
@@ -139,6 +143,36 @@ If the function does not declare `**kwargs`, every parameter must be satisfiable
 from the available artifacts/`task` — otherwise `_setup_runtime()` raises a
 `ValueError` naming the missing parameters. Parameter names must therefore match
 artifact ids, so ids must be valid Python identifiers.
+
+## Value artifacts render their value
+
+A [value artifact](/sdk/core/artifact#value-artifacts) — `NumberArtifact`,
+`BooleanArtifact`, `StringArtifact`, or your own `ValueArtifact` subclass —
+resolves `$id` to its authored `value`, not to a path. A task consuming
+`$samples` gets `10`, not the path of a file whose contents happen to be `10`:
+
+```python
+samples = NumberArtifact(id="samples", path="samples.json", value=10)
+
+CommandRuntime(command="python train.py --samples $samples")
+# python train.py --samples 10
+```
+
+The value still materializes to a file, so anything that wants to read it
+directly still can — `${samples.path}` gives you that path as usual. This only
+changes how the bare placeholder renders.
+
+Booleans render lowercased (`true` / `false`) to match the on-disk JSON, so
+`$flag` and `cat ${flag.path}` agree.
+
+<Callout type="warn" title={<><code>$id</code> is no longer a path here</>}>
+
+`cat $flag` renders `cat true`, not a path. A command that needs the file must
+say `${flag.path}` explicitly. `${flag.value}` is also available, but only on
+value artifacts — the dotted form forwards straight to the artifact, so
+`${result.value}` on a `FileArtifact` is an error, not a fallback.
+
+</Callout>
 
 ## Choosing ids
 
