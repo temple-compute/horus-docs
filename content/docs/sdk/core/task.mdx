@@ -113,6 +113,12 @@ earlier execution. The directory is created before the executor runs, so the
 same layout applies to local, remote, and scheduler-backed targets such as
 Slurm.
 
+It is created **inside** the task middleware chain, immediately before `_run()`
+— not before the chain is entered. Every task middleware's `before` hook has
+therefore already run by the time the directory exists, so a middleware may
+repoint `task.target` and have the directory created at the new location. See
+[Task Middleware](/sdk/plugin-system/middleware/domains#task-middleware).
+
 Subclasses must implement `_run()`, `is_complete()`, and `_reset()`.
 
 ### `inputs` and `outputs`

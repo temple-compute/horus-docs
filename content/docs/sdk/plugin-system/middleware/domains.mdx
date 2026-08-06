@@ -17,6 +17,22 @@ class TaskMiddlewareContext:
 
 Entered by `BaseTask.run()`.
 
+The task's [per-invocation working directory](/sdk/core/task#execution-working-directories)
+is created at the **innermost** point of this chain, immediately before
+`_run()`. Every middleware's `before` hook has therefore already run by the time
+the directory exists.
+
+That ordering is what makes retargeting possible. A middleware may repoint
+`context.task.target` in `before` — an orchestrator re-anchoring a task the
+engine added mid-run, for instance, such as a map-expander clone or an inlined
+subworkflow body — and the directory is then created under the new target. If it
+were created before the chain were entered, the retarget would land too late:
+the directory would exist at the old path and the executor would launch with a
+`cwd` that was never created.
+
+No built-in middleware relies on the directory existing during `before`. If
+yours does, create it yourself rather than assuming.
+
 ## Workflow Middleware
 
 ```python
