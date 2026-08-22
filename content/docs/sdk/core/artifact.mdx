@@ -92,8 +92,9 @@ class MyArtifact(BaseArtifact[str]):
   - `kind_description: ClassVar[str]`: a longer description of the kind. Defaults to an empty string. For translatable text, prefer a plugin-scoped translator (see the [SDK i18n guide](/sdk/i18n)).
 - **`pinned: bool`** (default `False`, excluded from serialization): set by an
   expander when it has already materialized this artifact's data at `path`,
-  directly on the workflow's orchestrator filesystem — a map clone's input
-  slice, its index file, or the fan-in folder. Such an artifact has no
+  directly on the workflow's orchestrator filesystem, so the path needs no
+  transfer: a conditional loop's per-iteration index file, for instance. Such
+  an artifact has no
   `transfer=True` producer edge, so without this flag `transfer_artifacts` would
   read the missing edge as "root input, fetch it from the orchestrator target"
   and try to fetch data that was never uploaded anywhere. Pinned inputs are

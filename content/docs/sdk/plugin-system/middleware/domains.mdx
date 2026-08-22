@@ -24,7 +24,7 @@ the directory exists.
 
 That ordering is what makes retargeting possible. A middleware may repoint
 `context.task.target` in `before` — an orchestrator re-anchoring a task the
-engine added mid-run, for instance, such as a map-expander clone or an inlined
+engine added mid-run, for instance, such as a `horus_map` clone or an inlined
 subworkflow body — and the directory is then created under the new target. If it
 were created before the chain were entered, the retarget would land too late:
 the directory would exist at the old path and the executor would launch with a

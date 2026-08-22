@@ -196,14 +196,15 @@ ordering but move no data:
 
 ```yaml
 edges:
-  - { source: clone, source_output: slice, target: gather, target_input: results, transfer: false }
+  - { source: worker, source_output: part, target: assemble, target_input: kit, transfer: false }
 ```
 
 The consumer still waits for the producer, but its input keeps whatever path it
 already has. Ordering-only edges are exempt from the "at most one edge per
 input" rule, so several of them can order-gate the same consumer input,
-alongside at most one regular (transferring) edge. This is the mechanism behind
-fan-in.
+alongside at most one regular (transferring) edge. This pattern is what lets
+the runtime wire expanding constructs into a live graph without disturbing
+their data paths.
 
 ### Ordering tasks that have no artifacts
 
@@ -219,7 +220,9 @@ edges:
 ```
 
 Such an edge never carries data, so `transfer` does not apply to it (it is
-`false` either way), and any number of them can point at the same task.
+`false` either way), and any number of them can point at the same task. The
+built-in map uses exactly this: each clone it creates is ordered behind the
+map by an edge that names no artifacts.
 
 Name **both** artifact ids or **neither**. Naming only one is an error
 (`IncompleteEdgeError`) rather than a silent downgrade to ordering-only, so a
@@ -301,15 +304,6 @@ ids may not themselves contain `/`, since that prefix is reserved.
 that embeds itself fails fast with `SubworkflowError` instead of expanding
 forever. The child is otherwise validated exactly like a top-level workflow:
 duplicate ids, unresolved edges, and cycles are all rejected the same way.
-
-<Callout type="info">
-
-Using a subworkflow as a `map:` template works, but fan-in currently pins on
-the subworkflow's placeholder output rather than the real inlined producer, so
-collecting results from a mapped subworkflow does not yet work correctly.
-Each individual clone still runs fine.
-
-</Callout>
 
 The [Python guide](/guides/writing-workflows-python#subworkflows) covers the
 same feature through `wf.subworkflow(...)`.

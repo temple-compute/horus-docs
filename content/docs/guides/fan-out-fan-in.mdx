@@ -4,27 +4,32 @@ title: Fan-out and fan-in (map)
 
 # Fan-out and fan-in (map)
 
-A **map** runs one task many times over a collection, then collects the results.
-It fans a single template task out into N clones, runs them concurrently, and
-fans their outputs into a pre-existing **gather** task. You do not write the N
-clones by hand: you declare the template once and Horus expands it at run time,
-once the source collection is known.
+A **map** runs one task many times over a collection. It is an ordinary task
+(`kind: horus_map`) that wraps another task, builds one clone of it per item of
+the collection (`score[a.txt]`, `score[b.txt]`, ...), runs the clones
+concurrently, and collects their outputs into its own single folder output. You
+declare the wrapped task once; Horus builds and dispatches the clones at run
+time, once the collection is known.
 
-There are two modes:
+The collection arrives through one of the map task's own inputs, so wiring a
+map into a pipeline is ordinary edge wiring: an upstream task feeds the map's
+collection input, and any downstream task consumes the map's folder output.
+There is no separate gather step to declare.
 
-- **Collection mode** fans out over the items of an upstream task's output: the
-  children of a `folder` artifact (sorted by name) or the elements of a `json`
-  list (in list order).
-- **Range mode** fans out over `range(0, N)`, feeding each clone its integer
-  index. There is no upstream source.
+A map fans out over two kinds of collections:
+
+- **A folder**: the children of a folder artifact, sorted by name. Each clone's
+  item points directly at a child file, so fanning out copies no data.
+- **A JSON list**: any other input artifact whose content reads as a JSON list.
+  Each element is written out as a small file for its clone.
 
 ## Collection mode (YAML)
 
-Use a `map:` block in place of a normal task body. The `over` block points at the
-collection to fan over, `template` is the per-clone task, and `gather` names the
-existing task (and its input) that receives all the outputs:
+Declare a `kind: horus_map` task. Its `over` field names the input carrying the
+collection, `item_input` names the wrapped task's input that receives each
+item, and `task:` holds the full wrapped task:
 
-```yaml
+```yaml title="score_batches.yaml"
 name: score_batches
 kind: horus_workflow
 
@@ -39,40 +44,42 @@ tasks:
       - { kind: folder, id: batches, path: "./horus-out/batches" }
 
   - id: score
-    map:
-      over: { source_task: split, source_output: batches, item_input: batch }
-      template:
-        kind: horus_task
-        target: { kind: local, working_directory: "./horus-work" }
-        runtime:
-          kind: command
-          command: "mkdir -p $scored && cp $batch/data.txt $scored/out.txt"
-        executor: { kind: shell }
-        inputs:
-          - { kind: folder, id: batch, path: "batch_in" }
-        outputs:
-          - { kind: folder, id: scored, path: "scored_out" }
-      gather: { task: collect, input: results }
+    name: Score every batch
+    kind: horus_map
+    target: { kind: local, working_directory: "./horus-work" }
+    over: batches
+    item_input: batch
+    inputs:
+      - { kind: folder, id: batches, path: "./horus-out/batches" }
+    outputs:
+      - { kind: folder, id: scored, path: "./horus-out/scored" }
+    task:
+      kind: horus_task
+      target: { kind: local, working_directory: "./horus-work" }
+      runtime:
+        kind: command
+        command: "mkdir -p $out && cp $batch/data.txt $out/scored.txt"
+      executor: { kind: shell }
+      inputs:
+        - { kind: folder, id: batch, path: "batch_in" }
+      outputs:
+        - { kind: folder, id: out, path: "scored_out" }
 
-  - id: collect
-    name: Collect results
+  - id: summarize
+    name: Summarize results
     kind: horus_task
     target: { kind: local, working_directory: "./horus-work" }
-    runtime: { kind: command, command: "ls $results > $summary" }
+    runtime: { kind: command, command: "ls $scored > $summary" }
     executor: { kind: shell }
     inputs:
-      - { kind: folder, id: results, path: "./horus-out/gathered" }
+      - { kind: folder, id: scored, path: "./horus-out/scored_in" }
     outputs:
       - { kind: file, id: summary, path: "./horus-out/summary.txt" }
+
+edges:
+  - { source: split, source_output: batches, target: score, target_input: batches }
+  - { source: score, source_output: scored, target: summarize, target_input: scored }
 ```
-
-The `over` block has three parts:
-
-| Field | Meaning |
-|-------|---------|
-| `source_task` | the upstream task that produces the collection |
-| `source_output` | the output artifact id on that task holding the collection |
-| `item_input` | the input id on `template` that each clone receives its item as |
 
 Run it triggered by the source task:
 
@@ -80,115 +87,149 @@ Run it triggered by the source task:
 horus run score_batches.yaml --trigger split
 ```
 
-## Range mode (YAML)
+### The map task's fields
 
-Give `range` a count and `index_input` the template input that receives the
-integer index. There is no `over` block and no upstream source:
+| Field | Meaning |
+|-------|---------|
+| `task` | the wrapped task, in full; one clone of it runs per item |
+| `over` | the id of one of the map task's **own inputs**, the one carrying the collection |
+| `item_input` | the input id on `task` that each clone receives its item as |
+| `max_concurrency` | optional upper bound on how many clones are dispatched at once |
+
+The map must declare **exactly one output**, and it must be a `folder`: that
+folder is where every clone's results land.
+
+### Inputs flow to every clone
+
+The wrapped task usually needs more than its item. Any other input declared on
+`task` is adopted by the map as one of its own inputs, so you feed it exactly
+like you feed the collection, through an edge from upstream or from a root
+artifact:
 
 ```yaml
-  - id: sample
-    map:
-      range: 8
-      index_input: idx
-      template:
-        kind: horus_task
-        target: { kind: local, working_directory: "./horus-work" }
-        runtime:
-          kind: command
-          command: "mkdir -p $out && cp $idx $out/idx.json"
-        executor: { kind: shell }
-        inputs:
-          - { kind: file, id: idx, path: "idx_in" }
-        outputs:
-          - { kind: folder, id: out, path: "out" }
-      gather: { task: collect, input: results }
+  - id: dock
+    name: Dock every ligand
+    kind: horus_map
+    over: ligands
+    item_input: ligand
+    inputs:
+      - { kind: folder, id: ligands, path: "ligands_in" }   # the collection
+    outputs:
+      - { kind: folder, id: complexes, path: "complexes" }
+    task:
+      kind: horus_task
+      # ...
+      inputs:
+        - { kind: file, id: ligand, path: "lig.pdbqt" }     # receives each item
+        - { kind: file, id: receptor, path: "rec.pdbqt" }   # adopted, shared by all clones
 ```
 
-Each clone's `idx` input is a small JSON file holding its index, so the template
-reads it like any other input artifact. In collection mode you may also set
-`index_input` to give every clone its numeric index alongside its item.
+Here `receptor` becomes an input of `dock` itself. An edge supplies it once to
+the map, and every clone gets a copy on its own target. If you also declare an
+input with the same id on the map yourself, yours wins, so you can wire a
+clone-shared input differently from how the wrapped task declared it.
+
+The wrapped task's own `id` is optional (it defaults to `<map id>.body`);
+nothing uses it directly, because every clone is named `<map id>[<slot>]`.
+
+## How slots and outputs line up
+
+- A **folder** source produces one slot per child, sorted by name, and the slot
+  takes the child's name. Items point directly at the children already on the
+  map's target, so nothing is copied.
+- A **JSON list** source writes each element under the map's working directory,
+  and slots are zero-padded indices (`000`, `001`, ...). Each item file keeps
+  the suffix of the `item_input`'s declared path.
+- Every clone output with a relative path is written inside the map's folder
+  output, one directory per slot: `complexes/ligand_A.pdbqt/complex.pdb`,
+  `complexes/ligand_B.pdbqt/complex.pdb`, and so on. A downstream task that
+  consumes the map's output sees one folder whose subdirectories hold each
+  clone's results.
 
 ## In Python
 
-`wf.map(...)` mirrors the YAML block. `template` is a full task object (its own
-`id` and `name` are ignored, every clone gets its own), `over` is the
-`(source_task, source_output, item_input)` triple for collection mode or `range`
-for range mode, and `gather` is the `(gather_task_id, gather_input_id)` pair:
+Construct a `MapTask` like any other task and put it in the workflow's task
+list (or add it with `wf.add_task(...)`):
 
 ```python
-# Collection mode: fan out over split's "batches" output.
-wf.map(
-    id="score",
-    template=score_template,
-    over=("split", "batches", "batch"),
-    gather=("collect", "results"),
-)
+from pathlib import Path
 
-# Range mode: run the body 8 times, feeding each clone its index.
-wf.map(
-    id="sample",
-    template=sample_template,
-    range=8,
-    index_input="idx",
-    gather=("collect", "results"),
+from horus_builtin.artifact.folder import FolderArtifact
+from horus_builtin.executor.shell import ShellExecutor
+from horus_builtin.runtime.command import CommandRuntime
+from horus_builtin.task.horus_task import HorusTask
+from horus_builtin.workflow.horus_workflow import HorusWorkflow
+from horus_builtin.workflow.map import MapTask
+from horus_runtime.core.workflow.edge import WorkflowEdge
+
+wf = HorusWorkflow(
+    name="score_batches",
+    tasks=[
+        HorusTask(
+            id="split",
+            name="split",
+            runtime=CommandRuntime(command="true"),
+            executor=ShellExecutor(),
+            outputs=[FolderArtifact(id="batches", path=Path("horus-out/batches"))],
+        ),
+        MapTask(
+            id="score",
+            name="Score every batch",
+            over="batches",
+            item_input="batch",
+            inputs=[FolderArtifact(id="batches", path=Path("horus-out/batches"))],
+            outputs=[FolderArtifact(id="scored", path=Path("horus-out/scored"))],
+            task=HorusTask(
+                id="body",  # optional; clones are named score[<slot>]
+                runtime=CommandRuntime(command="cp $batch/data.txt $out/scored.txt"),
+                executor=ShellExecutor(),
+                inputs=[FolderArtifact(id="batch", path=Path("batch_in"))],
+                outputs=[FolderArtifact(id="out", path=Path("scored_out"))],
+            ),
+        ),
+    ],
+    edges=[
+        WorkflowEdge(
+            source="split", source_output="batches",
+            target="score", target_input="batches",
+        ),
+    ],
 )
 ```
 
-`over` and `range` are mutually exclusive: pass exactly one. An optional
-`target=` sets where the expander itself runs (it defaults to a local target).
+Pass `max_concurrency=N` to cap how many clones the map dispatches at once.
 
-## How the clones and the gather task line up
+## Concurrency
 
-- The template must declare **exactly one output**. That output is what gets
-  fanned into the gather task.
-- Clones get deterministic, zero-padded ids: `score[0]`, `score[1]`, and so on.
-- Clone `i` writes into `{id}.gathered/{i}/`, and the gather task's designated
-  input is pointed at `{id}.gathered/`, so the gather task sees every clone's
-  output as children of one folder.
-- The gather task must already exist in the workflow and declare the input named
-  in `gather`.
+Clones run concurrently with each other. Two knobs bound them: the map's own
+`max_concurrency` caps that map's fan, and the workflow's
+[`capacity`](/sdk/core/workflow#capacity) gates every placement globally,
+clones included, so a large fan-out never oversubscribes a machine.
 
-## Resuming a partial map
+## Skipping and resuming
 
-The expander declares no meaningful output, so it always re-runs and
-deterministically re-derives the same set of clones. Each clone is skipped
-independently through the ordinary `skip_if_complete` behaviour if its own output
-already exists. A map that was interrupted part way through therefore resumes:
-finished clones are skipped and only the remaining ones run.
+A map fingerprints its inputs together with the wrapped task's full
+configuration, so editing the wrapped command invalidates the map's recorded
+result just like editing any other task does. When nothing changed and the
+outputs exist, the map skips entirely.
 
-That holds for a **re-run from a stored snapshot** too, not only for resuming
-the same process. A snapshot taken after a previous expansion already contains
-`score[0]`, `score[1]`, … and the expander re-derives them all anyway, so the
-re-derived clones replace the stored ones rather than colliding with them. The
-fresh copy must win: its paths are pinned under the current run's root, while
-the snapshot's copy still names the previous run's directory. See
-[`expand()` supersedes what a batch re-derives](/sdk/core/workflow#expand-supersedes-what-a-batch-re-derives).
+Each clone skips independently through ordinary `skip_if_complete` behaviour
+once its own output exists. Clones are registered into the workflow's DAG as
+soon as the map builds them, so they serialize with the workflow document: a
+run resumed from a stored snapshot sees the previous run's clones, skips the
+finished ones, and rebuilds only what is left. Setting
+`skip_if_complete: false` on the map propagates to every clone.
 
 ## Under the hood
 
-The clones and the gather task are wired into the live DAG with **ordering-only
-edges** (`transfer: false`), committed atomically through the runtime
-`expand(...)` API. Ordering-only edges keep the clones and the gather task inside
-the scheduler's reachable scope without letting the generic transfer step
-repoint a clone's already-materialized slice at the whole upstream collection.
-See the [workflow reference](/sdk/core/workflow) for the edge mechanism.
+The map is an ordinary DAG node that dispatches its own clones through the
+scheduler's machinery: the same transfer step, target pool, and placement
+manager that dispatch top-level tasks, with `max_concurrency` bounding this
+map's share. Each clone joins the live graph through the runtime `expand(...)`
+API behind an ordering-only edge from the map, which is why clones show up in
+the dashboard (nested under the map they belong to), in stored workflow
+documents, and in resumed runs, where a clone already in a terminal state is
+left alone instead of being redispatched.
 
-Two consequences are worth knowing about:
-
-**The gather task is held behind the expander.** The clone → gather edges only
-come into existence once the expander has run, so nothing else orders the two.
-In any workflow where the gather task is reachable from the trigger by some
-other path, the scheduler would dispatch it alongside the expander, with its
-fan-in input not yet pinned — surfacing as `Input artifact 'results' does not
-exist`. An ordering-only `expander → gather` edge on the expander's `.fanout`
-marker prevents that. It is derived when the workflow is loaded, so stored
-workflows pick it up with no migration.
-
-**Materialized slices are marked `pinned`.** The clone slices, index files and
-the fan-in folder are written straight onto the orchestrator filesystem and have
-no producer edge. Without a marker, the transfer step would read that missing
-edge as "root input" and try to fetch data that was never uploaded. They carry
-[`pinned`](/sdk/core/artifact) instead and are skipped.
-
-Range mode is exactly a bounded, counted loop. For a loop that repeats while a
-predicate holds, see the Loops guide.
+For a loop that repeats while a predicate holds, see the [Loops](/guides/loops)
+guide.
