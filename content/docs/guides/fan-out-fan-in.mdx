@@ -98,9 +98,6 @@ The map must declare **exactly one output**, and it must be a `folder`. That
 folder is the fan-in point: it holds one subdirectory per item, and it is what
 downstream tasks consume.
 
-Both rules are checked when the document loads, not mid-run, so a mistyped
-`over` or a non-folder output fails immediately.
-
 ### Inputs shared by every clone
 
 A body usually needs more than its item. Declare the extra inputs on the map
@@ -135,9 +132,10 @@ The `over` input must be an artifact kind that knows how to enumerate itself:
   at the child already on the map's target, so fanning out copies no data. A
   child directory is enumerated as a folder artifact and a child file as a
   file artifact, so each item packages and transfers correctly.
-- **A JSON list**: one item per element. Each element is written next to the
-  parent document as a single-element JSON artifact (`batches.00.json`,
-  `batches.01.json`, ...).
+- **A JSON list**: one item per element. Each element is written as a
+  single-element JSON artifact into one `<stem>.items` directory next to the
+  parent document (`batches.items/00.json`, `batches.items/01.json`, ...), so
+  a long list does not bury the declared artifacts sharing that directory.
 
 Custom artifact kinds can join this list; see
 [Iterating a custom artifact kind](#iterating-a-custom-artifact-kind) below.
@@ -282,7 +280,10 @@ The contract:
 - Each item must be **materialized on `target`**, at the path the returned
   artifact carries. The map hands the item to its clone as an already-placed
   input, so a co-located clone reads it in place and a remote one transfers it
-  from there.
+  from there. Items belong next to the collection they came from, not in the
+  consuming clone's working directory: `items()` runs before any clone exists,
+  and an item reaches its clone through the ordinary transfer path like any
+  other artifact.
 - Id each item `f"{self.id}:{slot}"` so it is traceable back to the collection
   it came from.
 - Raise `ArtifactIterationError` when the content cannot be enumerated, for
