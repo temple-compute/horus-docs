@@ -17,24 +17,28 @@ output. The map itself only fans out. Producing the collection is whatever
 task writes the iterable artifact, and folding the results back into one value
 is whatever task consumes the folder.
 
-## The two rebindings
+## What a clone sees
 
 The body is written as if it handled a single element. That works because a
-clone inherits the map's ports under the same ids, with two of them rebound:
+clone carries every port the map declares, plus one addition and one
+rebinding:
 
-- The **collection input** (`over`) is rebound to that clone's own item. In
-  the body, `$batches` is one batch, not the whole collection.
-- The **folder output** is rebound to that clone's own slot directory. In the
+- **A new artifact holding the item**, created under the id you pick with
+  `over.as`. In the body, `$batch` is one batch.
+- **The folder output**, rebound to that clone's own slot directory. In the
   body, `$scored` is this clone's directory, and Horus creates it before the
   clone runs, so the body never has to `mkdir` it.
 
-Every other input is shared verbatim by every clone.
+Every declared input reaches every clone unchanged, the collection included.
+So a body can read its own element *and* the collection it came from:
+`$batch` is one batch and `$batches` is all of them. That is why the item
+gets an id of its own rather than replacing the collection under its id.
 
 ## A map in YAML
 
-Declare a `kind: horus_map` task. Its `over` field names the input carrying
-the collection, and its `runtime` and `executor` are the body that runs once
-per item:
+Declare a `kind: horus_map` task. Its `over` field says which input carries
+the collection and what to call each item, and its `runtime` and `executor`
+are the body that runs once per item:
 
 ```yaml title="score_batches.yaml"
 name: score_batches
@@ -54,14 +58,16 @@ tasks:
     name: Score every batch
     kind: horus_map
     target: { kind: local, working_directory: "./horus-work" }
-    over: batches
+    over:
+      input_id: batches
+      as: batch
     inputs:
       - { kind: folder, id: batches, path: "./horus-out/batches_in" }
     outputs:
       - { kind: folder, id: scored, path: "./horus-out/scored" }
     runtime:
       kind: command
-      command: "cp $batches/data.txt $scored/scored.txt"
+      command: "cp $batch/data.txt $scored/scored.txt"
     executor: { kind: shell }
 
   - id: summarize
@@ -90,7 +96,8 @@ horus run score_batches.yaml --trigger split
 
 | Field | Meaning |
 |-------|---------|
-| `over` | the id of one of the map task's **own inputs**, the one carrying the collection |
+| `over.input_id` | the id of one of the map task's **own inputs**, the one carrying the collection |
+| `over.as` | the id each item is created under on its clone; must not collide with a declared input or output |
 | `runtime` / `executor` | the body, run once per item |
 | `max_concurrency` | optional upper bound on how many clones are dispatched at once |
 
@@ -108,7 +115,9 @@ its own target:
   - id: dock
     name: Dock every ligand
     kind: horus_map
-    over: ligands
+    over:
+      input_id: ligands
+      as: ligand
     inputs:
       - { kind: folder, id: ligands, path: "ligands_in" }   # the collection
       - { kind: file, id: receptor, path: "rec.pdbqt" }     # shared by all clones
@@ -116,17 +125,18 @@ its own target:
       - { kind: folder, id: complexes, path: "complexes" }
     runtime:
       kind: command
-      command: "vina --ligand $ligands --receptor $receptor --out $complexes/complex.pdbqt"
+      command: "vina --ligand $ligand --receptor $receptor --out $complexes/complex.pdbqt"
     executor: { kind: shell }
 ```
 
 An edge supplies `receptor` once to the map, and every clone gets it. Inside
-the body, `$ligands` is one ligand file and `$complexes` is this clone's
-output directory.
+the body, `$ligand` is one ligand file, `$ligands` is still the whole folder,
+and `$complexes` is this clone's output directory.
 
 ## Collections a map can fan out over
 
-The `over` input must be an artifact kind that knows how to enumerate itself:
+The input named by `over.input_id` must be an artifact kind that knows how to
+enumerate itself:
 
 - **A folder**: one item per child, sorted by name. Each item points directly
   at the child already on the map's target, so fanning out copies no data. A
@@ -175,7 +185,7 @@ from horus_builtin.executor.shell import ShellExecutor
 from horus_builtin.runtime.command import CommandRuntime
 from horus_builtin.task.horus_task import HorusTask
 from horus_builtin.workflow.horus_workflow import HorusWorkflow
-from horus_builtin.workflow.map import MapTask
+from horus_builtin.workflow.map import MapOver, MapTask
 from horus_runtime.core.workflow.edge import WorkflowEdge
 
 wf = HorusWorkflow(
@@ -191,8 +201,8 @@ wf = HorusWorkflow(
         MapTask(
             id="score",
             name="Score every batch",
-            over="batches",
-            runtime=CommandRuntime(command="cp $batches/data.txt $scored/scored.txt"),
+            over=MapOver(input_id="batches", item_id="batch"),
+            runtime=CommandRuntime(command="cp $batch/data.txt $scored/scored.txt"),
             executor=ShellExecutor(),
             inputs=[FolderArtifact(id="batches", path=Path("horus-out/batches_in"))],
             outputs=[FolderArtifact(id="scored", path=Path("horus-out/scored"))],
@@ -206,6 +216,10 @@ wf = HorusWorkflow(
     ],
 )
 ```
+
+In Python the `as` field is spelled `item_id`, because `as` is a Python
+keyword. Both spellings validate, so a workflow authored in YAML and one
+built in Python round-trip through the same document.
 
 Pass `max_concurrency=N` to cap how many clones the map dispatches at once.
 
