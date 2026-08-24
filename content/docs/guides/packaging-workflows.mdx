@@ -103,18 +103,6 @@ paths and nothing in a run ever creates them, so a missing one is simply a
 broken workflow. `horus package` fails immediately rather than handing you a zip
 that cannot run.
 
-A missing **input artifact** is only reported, and the command still succeeds:
-
-```text
-  - map_step.gathered (not found; assumed generated)
-```
-
-The reason is that not every input path exists before a run. A plugin may pin a
-path into the run directory as it expands the graph — a `map:` task, for
-example, generates `<task_id>.gathered` and `<task_id>.over.marker`, whose
-existence cannot be known ahead of time. See
-[Fan-out and fan-in](/guides/fan-out-fan-in) for what `map:` produces. So Horus
-tells you what it left out and lets you judge whether it mattered.
 
 <Callout type="success" title={<>Read the <code>-</code> lines before you send the zip</>}>
 

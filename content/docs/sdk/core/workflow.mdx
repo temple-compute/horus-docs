@@ -168,11 +168,11 @@ before target) and it routes the source artifact into the target input. Set
 
 ```python
 WorkflowEdge(
-    source="clone",
-    source_output="slice",
-    target="gather",
-    target_input="results",
-    transfer=False,   # order gather after clone, move no bytes
+    source="worker",
+    source_output="part",
+    target="assemble",
+    target_input="kit",
+    transfer=False,   # order assemble after worker, move no bytes
 )
 ```
 
@@ -185,9 +185,6 @@ each write a slice into). Because such an edge routes no data, the
 [one edge per `(target, target_input)`](#edge-validation) rule does not apply to
 it: any number of `transfer=False` edges, plus at most one `transfer=True` edge,
 may feed the same input.
-
-The declarative fan-out / fan-in (map) construct is built on ordering-only
-edges.
 
 ### Edges that name no artifacts
 
@@ -235,6 +232,13 @@ identical to the old behaviour when it does not apply: no capacity declared, or
 `max_concurrency` still enforced on top. A request that exceeds a location's
 total capacity raises `InsufficientCapacityError` immediately instead of
 blocking the ready-set loop.
+
+Capacity accounting lives in a single workflow-level placement manager,
+exposed as the `placement` property. The scheduler and any composite task that
+dispatches sub-tasks of its own (a `horus_map` awaiting its clones, for
+instance) share that one manager, so the accounting for a given location stays
+global across the whole run instead of resetting per dispatcher.
+
 ### `failure_policy`
 
 `failure_policy` decides how the scheduler reacts to a task failure:
@@ -457,10 +461,10 @@ id already exists **replaces** the existing one, together with every edge that
 touches that id, and a root artifact in the batch replaces an existing root of
 the same id.
 
-That asymmetry is deliberate, and it is what makes an expander re-runnable.
-Every expander re-derives its whole expansion each time it is triggered
-(`is_complete()` is hardcoded `False`), so a run resumed from a snapshot that
-already carries a previous run's expansion would otherwise collide with itself:
+That asymmetry is deliberate, and it is what makes an expanding construct
+re-runnable. A `horus_map` task registers its clones through `expand(...)`
+every time it actually runs, so a run resumed from a snapshot that already
+carries those clones would otherwise collide with itself:
 
 ```text
 TaskIdsAreNotUniqueError: Multiple tasks share the same ID 'score[0]'
@@ -506,8 +510,8 @@ wf.expand(tasks=[...], edges=[...])
 
 The same workflow is also available as `task.workflow`. This is the seam the
 built-in fan-out / fan-in (map) and loop constructs use to grow the graph while
-it runs: a task computes how many clones it needs, then commits them and their
-wiring in a single `expand(...)`.
+it runs: a map commits all of its clones in a single `expand(...)`, while a
+loop injects the next iteration one step at a time.
 
 ## Registering Custom Workflows
 
