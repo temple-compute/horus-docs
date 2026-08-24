@@ -186,10 +186,6 @@ each write a slice into). Because such an edge routes no data, the
 it: any number of `transfer=False` edges, plus at most one `transfer=True` edge,
 may feed the same input.
 
-The built-in fan-out / fan-in (map) construct is built on them: every clone a
-map creates is ordered behind the map itself by an edge that names no
-artifacts.
-
 ### Edges that name no artifacts
 
 `transfer=False` still requires `source_output` and `target_input` to name

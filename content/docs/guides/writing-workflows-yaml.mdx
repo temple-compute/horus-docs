@@ -220,9 +220,7 @@ edges:
 ```
 
 Such an edge never carries data, so `transfer` does not apply to it (it is
-`false` either way), and any number of them can point at the same task. The
-built-in map uses exactly this: each clone it creates is ordered behind the
-map by an edge that names no artifacts.
+`false` either way), and any number of them can point at the same task.
 
 Name **both** artifact ids or **neither**. Naming only one is an error
 (`IncompleteEdgeError`) rather than a silent downgrade to ordering-only, so a
