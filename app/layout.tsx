@@ -15,7 +15,7 @@ export const metadata: Metadata = {
     template: '%s | Horus',
   },
   description: 'Next generation workflow manager',
-  icons: { icon: '/img/horus.png' },
+  icons: { icon: { url: '/tc-logo.svg', type: 'image/svg+xml' } },
   openGraph: {
     title: 'Horus',
     description: 'Next generation workflow manager',
