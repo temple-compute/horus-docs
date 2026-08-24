@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "build": "opennextjs-cloudflare build",
+    "build": "next build",
     "dev": "next dev",
     "postinstall": "fumadocs-mdx",
     "start": "next start",
