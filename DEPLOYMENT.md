@@ -48,42 +48,30 @@ verified on Cloudflare's side before it serves users.
 
 ## Automatic deploy (CI)
 
-`.github/workflows/deploy.yml` runs `bun run deploy` on every push to `main`.
+Deploys are run by **Cloudflare Workers Builds**, the git integration configured under Workers &
+Pages → `horus-docs` → **Settings → Build**. It clones the repo, runs `bun install
+--frozen-lockfile`, then the configured commands:
 
-It needs two repository secrets (**Settings → Secrets and variables → Actions**):
+| Branch | Command Cloudflare runs | Result |
+|--------|-------------------------|--------|
+| Build (all branches) | `bun run build` | `.open-next/worker.js` + `.open-next/assets` |
+| `main` | `npx wrangler deploy` | live on `docs.templecompute.com` |
+| any other branch | `npx wrangler versions upload` | preview version, not promoted |
 
-| Secret | Where to get it |
-|--------|-----------------|
-| `CLOUDFLARE_API_TOKEN` | Cloudflare dashboard → My Profile → API Tokens → Create Token |
-| `CLOUDFLARE_ACCOUNT_ID` | Workers & Pages overview page, right-hand sidebar |
+No repository secrets are involved; Cloudflare authenticates the build itself. There is no
+GitHub Actions deploy workflow, and adding one back would deploy the same worker twice per push.
 
-When creating the token, select the **Edit Cloudflare Workers** template from the **Custom**
-dropdown rather than assembling permissions by hand. It covers script upload and the static-asset
-upload OpenNext performs; hand-picked permission sets usually end up one scope short.
+The build command must be `opennextjs-cloudflare build`, not `next build`. Wrangler's entry point
+is `.open-next/worker.js` (see `wrangler.jsonc`), which only the OpenNext build produces; with
+`next build` both deploy commands fail with `entry-point file … was not found` /
+`Could not find compiled Open Next config`.
 
-Add these only if they apply:
+Because OpenNext itself shells out to the package manager's `build` script, `open-next.config.ts`
+sets `buildCommand: "bun run build:next"` to point it at the raw `next build`. Without that the
+two call each other forever. If you rename either script, rename it in both places.
 
-- **Zone → DNS → Edit**, if you attach the custom domain via wrangler instead of the dashboard.
-- **Account → Workers R2 Storage → Edit**, if you enable R2 incremental caching (see below).
-
-Tokens are shown once. User tokens (My Profile) use a `cfut_` prefix; account tokens (Manage
-Account) use `cfat_`. Either works for CI.
-
-To check a token before trusting CI with it, call an **account**-scoped endpoint:
-
-```bash
-curl -s "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts" \
-  -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"
-```
-
-Do *not* use `/user/tokens/verify` for this. It is user-scoped and returns `Invalid API Token`
-for a perfectly good account token, which is a misleading false negative.
-
-A listing means the token authenticates and can read Workers. It does not prove write access; a
-missing edit scope surfaces later as `Authentication error [code: 10000]` during deploy.
-
-`.github/workflows/test.yml` runs `bun run build` on pull requests, so MDX and type errors are
-caught before merge.
+`.github/workflows/test.yml` runs `bun run build` on pull requests, so MDX, type, and worker
+bundling errors are caught before merge.
 
 ## Custom domain
 
