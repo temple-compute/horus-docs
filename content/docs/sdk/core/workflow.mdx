@@ -38,7 +38,8 @@ async def _reset(self) -> None:
 
 ### Contract
 
-- `from_yaml()`: load and construct a workflow from a YAML file
+- `from_yaml()`: load and construct a workflow from a YAML file, recording the
+  file it loaded as `source_path`
 - `_run(trigger_id)`: workflow-specific execution logic; do not mutate `status` here
 - `_reset()`: **async**: subclass-specific reset logic; do not mutate `status` here. `reset()` / `_reset()` are `async`; callers must `await`.
 - `run(trigger_id)` is the public `final` entry point and runs `WorkflowMiddleware`
@@ -284,6 +285,25 @@ Called by `_run()` implementations before each `task.target.dispatch(task)`. It:
 rebuilds the map on demand.
 
 See [Transfer Strategy](/sdk/core/transfer) for details.
+
+### `source_path`
+
+`source_path` is the file `from_yaml()` loaded, resolved to an absolute path:
+
+```python
+wf = HorusWorkflow.from_yaml("my-pipeline/pipeline.yaml")
+wf.source_path      # PosixPath('/abs/my-pipeline/pipeline.yaml')
+```
+
+It is `None` for a workflow built directly in Python or restored from a
+snapshot, neither of which has a file behind it. Deriving it from
+`_base_directory` would only work when the file happened to be named
+`workflow.yaml`, and the CLI accepts any filename (`horus run pipeline.yaml`),
+so the loader keeps the file path itself rather than making callers guess it.
+
+Like `_base_directory`, it is runtime-only state, not a model field, and never
+serialized: a snapshot's meaning is unchanged, and a workflow round-tripped
+through one has `source_path is None`.
 
 ## Built-in Workflow
 
