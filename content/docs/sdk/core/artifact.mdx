@@ -39,6 +39,11 @@ Each artifact:
   unique (see [DAG planning](/sdk/core/workflow#dag-planning) and
   [edges](/sdk/core/workflow#edges)).
 - Has a **path** identifying its location on disk
+- Carries optional **`labels`**: a `dict[str, str]` of free-form metadata
+  (`labels: {subject: batch_017, role: measurement}`). The runtime never
+  interprets them and they play no part in caching; they exist for whatever
+  reads the workflow afterwards, such as a UI grouping nodes or a lineage
+  query.
 - Defines:
   - How to **read** its contents back into a Python object
   - How to **write** a Python object to its file representation
