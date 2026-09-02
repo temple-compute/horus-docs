@@ -242,6 +242,15 @@ you provide a different target.
 If a task declares no outputs, `HorusTask.is_complete()` returns `False`, so the
 task always runs unless your workflow adds different logic.
 
+When a task does declare outputs, `HorusTask` also fingerprints its inputs and
+its own configuration (runtime and executor) before running, and skips a
+future run only while that fingerprint still matches. A runtime or executor
+that reads a local file, such as `PythonScriptRuntime`'s script, reports it
+through `local_files()` so its digest is folded into the fingerprint too;
+editing the file invalidates the cache even though the path on disk did not
+change. `BaseRuntime.local_files()` and `BaseExecutor.local_files()` both
+default to `[]`.
+
 ## `FunctionTask`
 
 `FunctionTask` is the simplest way to build an in-memory workflow in Python:

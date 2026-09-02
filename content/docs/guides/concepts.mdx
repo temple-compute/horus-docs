@@ -33,6 +33,12 @@ produces. Outputs are how Horus knows a task is done: if a task's declared
 outputs already exist, it is skipped on the next run, unless you set
 `skip_if_complete: false`. Artifacts are also the data passed between tasks.
 
+A task is only skipped while its inputs and its own configuration are
+unchanged since the run that produced its outputs. That includes local files
+a runtime or executor reads directly, such as a `python_script` task's script:
+editing the script invalidates the cache and the task re-runs, even though
+its path did not change.
+
 In a command you reference an artifact's path with `$id` substitution. For
 example, `echo hi > $result` writes to the artifact whose id is `result`. See
 [artifact substitution](/sdk/core/artifact-substitution) for the full
