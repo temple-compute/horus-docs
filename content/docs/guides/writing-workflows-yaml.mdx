@@ -94,6 +94,19 @@ outputs:
 Each artifact has an `id` (unique within the task's inputs or outputs) and a
 `path`. A task counts as complete when all of its `outputs` exist on disk.
 
+An artifact may also carry `labels`, a free-form `string: string` mapping the
+runtime never reads:
+
+```yaml
+outputs:
+  - { kind: file, id: scored, path: batch_017.parquet, labels: { subject: batch_017, role: measurement } }
+```
+
+They exist for whatever reads the workflow afterwards, not for the run
+itself: a UI grouping nodes, or a lineage query answering "everything derived
+from subject X." A domain expresses its own structure through labels instead
+of the runtime growing a field per domain.
+
 The **directory containing** each output is created before the task runs, so
 `path: "./out/model.pkl"` works even when `out/` does not exist yet. No task
 needs a `mkdir` step of its own.
