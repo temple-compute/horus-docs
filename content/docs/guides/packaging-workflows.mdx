@@ -66,7 +66,7 @@ Alongside it travel, at paths relative to the workflow's directory:
 
 A `Secret`-marked field (an `SSHTarget.password`, for instance) is redacted to
 a `${secret:<ref>}` reference before the workflow YAML is written into the
-zip — see [Handling secrets](/guides/handling-secrets).
+zip. See [Handling secrets](/guides/handling-secrets).
 
 Anything a task declares as an `outputs` entry is left out. That is run output:
 it gets regenerated on the machine that runs the workflow, so shipping it would
