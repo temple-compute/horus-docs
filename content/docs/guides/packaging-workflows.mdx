@@ -64,6 +64,10 @@ Alongside it travel, at paths relative to the workflow's directory:
 - Every executor's **`environment_file`**, if the executor you are using has one
   (a conda-style executor, for instance).
 
+A `Secret`-marked field (an `SSHTarget.password`, for instance) is redacted to
+a `${secret:<ref>}` reference before the workflow YAML is written into the
+zip. See [Handling secrets](/guides/handling-secrets).
+
 Anything a task declares as an `outputs` entry is left out. That is run output:
 it gets regenerated on the machine that runs the workflow, so shipping it would
 be pointless and often enormous. Note that this is a structural rule, not a list

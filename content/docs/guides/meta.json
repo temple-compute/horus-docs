@@ -12,6 +12,7 @@
     "running-workflows",
     "packaging-workflows",
     "sanitizing-workflows",
+    "handling-secrets",
     "examples",
     "extending"
   ]
