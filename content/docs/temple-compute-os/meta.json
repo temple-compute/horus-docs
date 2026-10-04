@@ -1,0 +1,11 @@
+{
+  "title": "Temple Compute OS",
+  "description": "The workflow platform built on Horus",
+  "root": true,
+  "pages": [
+    "---Workflow editor---",
+    "custom-input-views",
+    "---Reference---",
+    "custom-view-protocol"
+  ]
+}

@@ -1,0 +1,53 @@
+---
+title: Custom view protocol
+description: The postMessage protocol between a custom input view and the Temple Compute OS workflow editor.
+---
+
+A [custom input view](/temple-compute-os/custom-input-views) is an HTML
+page that edits one workflow input. This page is the reference for how that
+page talks to the editor.
+
+## Sandbox
+
+The page runs in a sandboxed iframe that only allows scripts. It cannot reach
+the editor, the API or your session. It can do exactly one thing: replace the
+content of the input it is bound to. Saves are only accepted while the workflow
+is being edited. Viewing a finished run is read-only, so a page can never
+change what a run consumed.
+
+## Messages
+
+The page and the editor exchange plain objects with `postMessage`. Every
+message has a `tc` field.
+
+| Direction     | Message | Meaning |
+| ------------- | ------- | ------- |
+| editor → page | `{tc: "init", text, value, filename, kind, editable}` | The input's current state. Sent when the page loads and again whenever the content changes. `text` is the stored bytes as text (`null` if none), `value` is a value artifact's value. |
+| page → editor | `{tc: "save", text, filename?}` | Replace the content with text. |
+| page → editor | `{tc: "save", file, filename?}` | Replace the content with a `File` or `Blob`, for any bytes. |
+| page → editor | `{tc: "save", value}` | Set a value artifact's value. |
+| editor → page | `{tc: "saved"}` or `{tc: "error", message}` | The result of the last save. |
+
+Passing `filename` also renames the stored file. Leave it out to keep the
+current name. `init` can arrive more than once, so treat it as "here is the
+current state", not as a one-time setup.
+
+Post to the parent with target origin `"*"`. The sandboxed page has no origin
+of its own to name.
+
+## Saving files and values
+
+To save a file, post the `File` straight from an `<input type="file">`, without
+any base64:
+
+```js
+input.addEventListener("change", () => {
+  parent.postMessage({ tc: "save", file: input.files[0] }, "*")
+})
+```
+
+For a value artifact, post the value itself:
+
+```js
+parent.postMessage({ tc: "save", value: 300 }, "*")
+```
