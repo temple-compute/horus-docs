@@ -3,8 +3,17 @@
   "description": "The workflow platform built on Horus",
   "root": true,
   "pages": [
+    "---Get started---",
+    "index",
     "---Workflow editor---",
+    "designing-workflows",
+    "artifacts",
     "custom-input-views",
+    "---Running at scale---",
+    "runs",
+    "projects-and-campaigns",
+    "---Sharing and extending---",
+    "library-and-plugins",
     "---Reference---",
     "custom-view-protocol"
   ]
