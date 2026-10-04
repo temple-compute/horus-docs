@@ -1,19 +1,24 @@
 {
-  "title": "Docs",
+  "title": "Horus Guides",
+  "description": "Write, run, and share workflows",
   "root": true,
   "pages": [
+    "---Get started---",
     "installation",
     "quickstart",
     "concepts",
+    "examples",
+    "---Writing workflows---",
     "writing-workflows-yaml",
     "writing-workflows-python",
     "fan-out-fan-in",
     "loops",
+    "---Running and sharing---",
     "running-workflows",
     "packaging-workflows",
     "sanitizing-workflows",
     "handling-secrets",
-    "examples",
+    "---Extending---",
     "extending"
   ]
 }
