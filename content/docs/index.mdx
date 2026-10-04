@@ -1,38 +1,60 @@
 ---
-title: Horus Documentation
-description: Horus is a workflow manager for HPC and the cloud. Describe a pipeline in YAML or Python and Horus runs it in dependency order.
+title: Temple Compute Documentation
+description: Documentation for Horus, the open-source workflow manager for HPC and the cloud, and Temple Compute OS, the workflow platform built on it.
 ---
 
-# Horus
+This site documents two products:
 
-Horus is a workflow manager for HPC and the cloud. You describe a pipeline as a
-set of tasks, in YAML or Python, and Horus runs them in dependency order. It
-moves data between stages, sends each stage to the compute you point it at, and
-shows live progress in your terminal.
+- **Horus**, an open-source workflow manager for HPC and the cloud. You
+  describe a pipeline as a set of tasks, in YAML or Python, and Horus runs them
+  in dependency order. It moves data between stages, sends each stage to the
+  compute you point it at, and shows live progress in your terminal.
+- **Temple Compute OS**, the workflow platform built on Horus. It adds a
+  visual workflow editor, run and campaign management, and shared projects.
 
-## New to Horus? Start here
+## Horus
+
+### Get started
 
 - [Installation](/guides/installation): get the `horus` command.
 - [Quickstart](/guides/quickstart): write and run your first workflow.
 - [Core concepts](/guides/concepts): workflows, tasks, artifacts, and edges.
 - [Examples](/guides/examples): runnable workflows you can download and adapt.
 
-## Writing and running workflows
+### Writing workflows
 
-- [Writing workflows (YAML)](/guides/writing-workflows-yaml): the full schema,
-  with a multi-task example.
-- [Writing workflows (Python)](/guides/writing-workflows-python): for tasks
-  that need real logic or user prompts.
+- [Workflows in YAML](/guides/writing-workflows-yaml): the full schema, with a
+  multi-task example.
+- [Workflows in Python](/guides/writing-workflows-python): for tasks that need
+  real logic or user prompts.
+- [Fan-out and fan-in](/guides/fan-out-fan-in) and [Loops](/guides/loops):
+  run a task once per item, or repeat a group of tasks.
+
+### Running and sharing
+
 - [Running workflows](/guides/running-workflows): the `horus run` command and
   the live dashboard.
 - [Packaging workflows](/guides/packaging-workflows): the `horus package`
   command, which zips a workflow and its inputs so it can run elsewhere.
 - [Sanitizing workflows](/guides/sanitizing-workflows): the `horus sanitize`
   command, which declares a workflow's implicit inputs so a UI can offer them.
+- [Handling secrets](/guides/handling-secrets): keep credentials out of
+  exported and packaged workflows.
 
-## Building on Horus
+### Extending
 
 - [Extending Horus](/guides/extending): add your own artifact types, tasks,
   runtimes, targets, and interactions as plugins.
-- [Runtime SDK](/sdk/overview): the API reference for extending Horus with
-  custom tasks, runtimes, targets, transfers, middleware, and plugins.
+- [SDK reference](/sdk/overview): the Python API for extending the runtime.
+
+## Temple Compute OS
+
+### Workflow editor
+
+- [Custom input views](/temple-compute-os/custom-input-views): give an input
+  its own editor, written as one HTML page that ships with the workflow.
+
+### Reference
+
+- [Custom view protocol](/temple-compute-os/custom-view-protocol): the
+  messages a custom view exchanges with the editor.

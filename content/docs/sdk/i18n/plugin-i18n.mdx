@@ -1,8 +1,6 @@
 ---
-title: Plugin Internationalization
+title: Plugin translations
 ---
-
-# Plugin Internationalization
 
 Plugins get their own isolated translation namespace using `make_translator` from `horus_runtime.i18n`. Each plugin calls this factory once at module load time and receives a `tr` callable bound exclusively to its own domain and locale directory.
 

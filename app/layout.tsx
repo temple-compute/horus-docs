@@ -11,14 +11,14 @@ const inter = Inter({
 export const metadata: Metadata = {
   metadataBase: new URL('https://docs.templecompute.com'),
   title: {
-    default: 'Horus',
-    template: '%s | Horus',
+    default: 'Temple Compute Docs',
+    template: '%s | Temple Compute Docs',
   },
-  description: 'Next generation workflow manager',
+  description: 'Documentation for Horus and Temple Compute OS',
   icons: { icon: { url: '/tc-logo.svg', type: 'image/svg+xml' } },
   openGraph: {
-    title: 'Horus',
-    description: 'Next generation workflow manager',
+    title: 'Temple Compute Docs',
+    description: 'Documentation for Horus and Temple Compute OS',
     images: '/img/horus.png',
   },
 };
