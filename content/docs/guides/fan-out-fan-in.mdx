@@ -237,7 +237,9 @@ run at the same time on a single declared target.
 
 A map memoizes like any other task. Its fingerprint covers its inputs and its
 own configuration, including the body, so editing the command invalidates the
-map's recorded result. When nothing changed and the folder output exists, the
+map's recorded result. A folder collection is fingerprinted by the content of
+every file in it, so when the upstream task rewrites the collection, the map
+and its clones run again. When nothing changed and the folder output exists, the
 map skips entirely and does not fan out at all.
 
 Once the map does run, each clone skips independently through ordinary

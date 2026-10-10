@@ -251,6 +251,11 @@ editing the file invalidates the cache even though the path on disk did not
 change. `BaseRuntime.local_files()` and `BaseExecutor.local_files()` both
 default to `[]`.
 
+A folder input is digested by its contents: the sorted sha256 and relative
+path of every file in it. Editing, adding, removing or renaming any file in
+the folder invalidates the cache, so a task fed by a folder an upstream task
+rewrote runs again.
+
 ## `FunctionTask`
 
 `FunctionTask` is the simplest way to build an in-memory workflow in Python:
