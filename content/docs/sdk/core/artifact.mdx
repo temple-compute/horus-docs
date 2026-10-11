@@ -226,7 +226,8 @@ value you typed. The only runtime difference is that a root value artifact has
 no producer, so [`transfer_artifacts`](/sdk/core/workflow) calls `materialize()`
 on it the first time a consumer needs it — and copies the root's value onto the
 consumer's own input artifact, so that substitution sees the authored value
-rather than the field default.
+rather than the field default. When the consumer is of the same kind, the fields that
+qualify the value (a boolean's `on` / `off` mapping) are copied along with it.
 
 ### `NumberArtifact`
 
@@ -249,6 +250,56 @@ from horus_builtin.artifact.boolean import BooleanArtifact
 
 verbose = BooleanArtifact(id="verbose", path="verbose.json", value=True)
 ```
+
+#### Mapping the states to other values
+
+A boolean can hand its task a value of your choosing for each state instead of
+`true` / `false`. Set both `on` and `off` to an `Option` (`{value, label}`, from
+`horus_builtin.artifact.options`): `value` is what the task receives, `label` is
+only what a UI shows (it falls back to the value). A "Use GPU" toggle:
+
+```yaml
+artifacts:
+  - id: device
+    kind: boolean
+    path: roots/device.json
+    value: true # the state; stored as "gpu"
+    on: {value: gpu, label: GPU}
+    off: {value: cpu, label: CPU}
+
+tasks:
+  - id: train
+    runtime:
+      kind: command
+      command: python train.py --device $device # --device gpu
+```
+
+With a mapping, `value` holds the value the task receives (`"gpu"` / `"cpu"`),
+never the toggle state; the toggle is on when `value == on.value`. A bare
+`true` / `false` given as `value`, passed to `write()`, or left on disk by a
+producer that wrote the state is translated to its mapped value, so `$device`,
+the materialized file (JSON, `"gpu"`) and `read()` always agree.
+
+```python
+from horus_builtin.artifact.boolean import BooleanArtifact
+from horus_builtin.artifact.options import Option
+
+device = BooleanArtifact(
+    id="device",
+    path="device.json",
+    value=True,
+    on=Option(value="gpu", label="GPU"),
+    off=Option(value="cpu", label="CPU"),
+)
+device.value  # "gpu"
+device.write(False)
+device.read()  # "cpu"
+```
+
+Validation rejects setting only one of `on` / `off`, two equal values, a `value`
+that is neither of them, and mapped values that are themselves `true` /
+`false` (those already name the state). Without `on` / `off`, a boolean behaves
+exactly as above.
 
 ### `StringArtifact`
 

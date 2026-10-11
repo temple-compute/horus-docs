@@ -164,6 +164,8 @@ changes how the bare placeholder renders.
 
 Booleans render lowercased (`true` / `false`) to match the on-disk JSON, so
 `$flag` and `cat ${flag.path}` agree.
+A boolean with an [`on` / `off` mapping](/sdk/core/artifact#mapping-the-states-to-other-values)
+renders its mapped value instead: `--device $device` becomes `--device gpu`.
 
 A `ChoiceArtifact` renders the picked option's value, not its label: with
 options `cpu` / `gpu` (labels `CPU` / `GPU`), `--device $device` renders
