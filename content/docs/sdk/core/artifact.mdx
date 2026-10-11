@@ -261,8 +261,43 @@ from horus_builtin.artifact.string import StringArtifact
 label = StringArtifact(id="label", path="label.txt", value="baseline")
 ```
 
+### `ChoiceArtifact`
+
+A value picked from a fixed list of `options`, each a `{value, label}` pair:
+`value` is what the task receives, `label` is only what a UI shows (it falls
+back to the value). `value` defaults to the first option. Strings are
+materialized as plain text, like `StringArtifact`; other scalars as JSON.
+
+```python
+from horus_builtin.artifact.choice import ChoiceArtifact
+
+device = ChoiceArtifact(
+    id="device",
+    path="device.txt",
+    options=[{"value": "cpu", "label": "CPU"}, {"value": "gpu", "label": "GPU"}],
+    value="gpu",
+)
+```
+
+or in a workflow YAML:
+
+```yaml
+- id: device
+  kind: choice
+  options:
+    - {value: cpu, label: CPU}
+    - {value: gpu, label: GPU}
+  value: gpu
+```
+
+A command `run --device $device` renders `run --device gpu` — the value, never
+the label. Validation rejects an empty `options` list, duplicate values
+(compared by their rendered text, so `true` and `"true"` collide), and a
+`value` that is not one of the options. `write()` and `read()` enforce the
+same, so a producer task cannot emit an undeclared value.
+
 `ValueArtifact` itself is abstract and is not registered as a kind; only
-`number`, `boolean` and `string` are. Subclass it to add your own — declare the
+`number`, `boolean`, `string` and `choice` are. Subclass it to add your own — declare the
 concrete `value` type and the on-disk serialization through `read`/`write`,
 exactly as for any other artifact, and `materialize()` follows for free.
 

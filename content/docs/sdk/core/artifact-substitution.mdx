@@ -147,7 +147,7 @@ artifact ids, so ids must be valid Python identifiers.
 ## Value artifacts render their value
 
 A [value artifact](/sdk/core/artifact#value-artifacts) — `NumberArtifact`,
-`BooleanArtifact`, `StringArtifact`, or your own `ValueArtifact` subclass —
+`BooleanArtifact`, `StringArtifact`, `ChoiceArtifact`, or your own `ValueArtifact` subclass —
 resolves `$id` to its authored `value`, not to a path. A task consuming
 `$samples` gets `10`, not the path of a file whose contents happen to be `10`:
 
@@ -164,6 +164,10 @@ changes how the bare placeholder renders.
 
 Booleans render lowercased (`true` / `false`) to match the on-disk JSON, so
 `$flag` and `cat ${flag.path}` agree.
+
+A `ChoiceArtifact` renders the picked option's value, not its label: with
+options `cpu` / `gpu` (labels `CPU` / `GPU`), `--device $device` renders
+`--device gpu`.
 
 <Callout type="warn" title={<><code>$id</code> is no longer a path here</>}>
 
