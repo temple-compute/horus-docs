@@ -54,6 +54,7 @@ class BaseTask(AutoRegistry, entry_point="task"):
     runtime: BaseRuntime
     target: BaseTarget
     status: TaskStatus = TaskStatus.IDLE
+    error: str | None = None
     runs: int = 0
     skip_if_complete: bool = True
     interaction: BaseInteractionTransport | None = None
@@ -220,6 +221,22 @@ class HorusTask(BaseTask):
 
 `run()` wraps `_run()` in `TaskMiddleware.call_with_middleware(...)` and owns
 all status transitions.
+
+### Failures
+
+When `_run()` (or a middleware) raises, `run()` sets `FAILED`, logs the
+exception with its traceback, and stores a one-line reason in `error`, e.g.
+`"TaskExecutionError: sbatch: error: Batch job submission failed: ..."`. For
+an `ExceptionGroup` (a map task whose clones failed), `error` describes the
+first leaf exception, not the group wrapper, and counts the rest
+(`"... (+2 more)"`). The full traceback stays in the task's log.
+
+This happens inside the middleware chain, while the task is still the current
+one, so every middleware sees the status, `error` and the logged traceback
+before its own cleanup runs: a middleware that uploads the task's log file in
+a `finally` uploads a log that ends with the error. `reset()` and the next
+run clear `error`. The timing middleware reports how the task ended
+("completed in", "failed after", "was canceled after").
 
 ## Built-in Tasks
 
