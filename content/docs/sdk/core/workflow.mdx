@@ -440,12 +440,18 @@ Every run is initiated by a **trigger**: the `id` of one task in the workflow,
 passed to `run(trigger_id=...)`. The trigger scopes which tasks run, a workflow
 rarely needs to execute its entire graph on every run.
 
-Given a trigger, the execution plan is the trigger task plus:
+Given a trigger, the execution plan is:
 
-- its **ancestors**: every upstream task needed to produce the trigger's
-  inputs, walked transitively; and
-- its **descendants**: every downstream task that (directly or transitively)
-  consumes the trigger's outputs.
+- its **descendants**: the trigger itself and every downstream task that
+  (directly or transitively) depends on it; and
+- the **ancestors of those descendants**: every upstream task any of them
+  needs, walked transitively. This includes the trigger's own ancestors, and
+  also the other parents of a downstream join.
+
+For example, with edges `setup -> fetch`, `fetch -> report` and
+`cleanup -> fetch`, triggering `setup` runs all four tasks: `fetch` cannot
+start until `cleanup` has run, even though `cleanup` is neither upstream nor
+downstream of `setup`.
 
 Unrelated branches of the graph are excluded entirely. Within that scope, tasks
 still run in topological order, and any ancestor whose outputs already exist is
@@ -455,6 +461,11 @@ upstream work is not redundantly recomputed.
 Passing a `trigger_id` that does not correspond to a task in the workflow raises
 `UnknownTaskError` (from `execution_plan`). `HorusWorkflow._run` likewise rejects
 an unknown trigger before planning.
+
+If the scheduler reaches a point where nothing is ready or running but tasks in
+scope are still neither completed, blocked nor failed, the run fails instead of
+reporting success: a cycle raises `CyclicDependencyError`, anything else raises
+`StalledWorkflowError` naming the stuck tasks.
 
 ## Mutating the DAG at runtime
 

@@ -61,9 +61,10 @@ Edges are the single source of truth for the DAG:
 
 ## Trigger
 
-Every run starts from a trigger, the `id` of one task. Horus runs that task
-along with the tasks it depends on (its ancestors) and the tasks that depend on
-it (its descendants); unrelated branches are skipped. By default the trigger is
+Every run starts from a trigger, the `id` of one task. Horus runs that task,
+the tasks that depend on it (its descendants), and every task those need
+upstream (their ancestors, including the other inputs of a downstream join);
+unrelated branches are skipped. By default the trigger is
 the first task in the file.
 
 ## Resources
