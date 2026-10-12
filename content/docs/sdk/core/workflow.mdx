@@ -284,6 +284,11 @@ Called by `_run()` implementations before each `task.target.dispatch(task)`. It:
 `transfer_artifacts()` call via the optional `source_map` argument; omitting it
 rebuilds the map on demand.
 
+Before transferring, the scheduler asks the task whether it is already
+complete using `source_digests()`, the digest of each input at its source. A
+task that is complete is skipped with no transfer at all; see
+[incremental skipping](/sdk/core/task#horustask).
+
 See [Transfer Strategy](/sdk/core/transfer) for details.
 
 ### `source_path`
