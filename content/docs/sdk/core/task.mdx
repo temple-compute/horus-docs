@@ -273,6 +273,16 @@ path of every file in it. Editing, adding, removing or renaming any file in
 the folder invalidates the cache, so a task fed by a folder an upstream task
 rewrote runs again.
 
+The workflow checks this before staging anything on the task's target. It
+digests each input where it currently lives (a digest depends only on content,
+so it equals the digest of the staged copy) and, when the outputs exist and
+the fingerprint still matches, skips the task without transferring its inputs
+or dispatching it. If an input cannot be digested at its source, the task is
+not skipped early: its inputs are transferred and `run()` checks completion as
+usual. A custom `BaseTask` opts in by overriding
+`is_complete_before_transfer(input_digests)`, which defaults to `False`;
+`HorusTask` implements it with the same fingerprint check as `is_complete()`.
+
 ## `FunctionTask`
 
 `FunctionTask` is the simplest way to build an in-memory workflow in Python:
