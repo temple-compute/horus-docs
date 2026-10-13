@@ -239,12 +239,19 @@ A map memoizes like any other task. Its fingerprint covers its inputs and its
 own configuration, including the body, so editing the command invalidates the
 map's recorded result. A folder collection is fingerprinted by the content of
 every file in it, so when the upstream task rewrites the collection, the map
-and its clones run again. When nothing changed and the folder output exists, the
-map skips entirely and does not fan out at all.
+runs again. When nothing changed and the folder output exists, the map skips
+entirely and does not fan out at all.
 
 Once the map does run, each clone skips independently through ordinary
 `skip_if_complete` behaviour: a clone whose output and manifest are intact is
-left alone, and only the slots that are genuinely incomplete are rebuilt.
+left alone, and only the slots that are genuinely incomplete are rebuilt. A
+clone fingerprints its own item rather than the whole collection, so changing
+one item reruns only that item's clone. The exception is a body that can read
+the whole collection: a `${<collection>}` or `${task...}` placeholder, or any
+runtime other than a command (a Python function receives the collection by
+parameter name). Its clones keep the collection in their fingerprint and rerun
+whenever any item changes. The choice is stored on each clone as
+`unfingerprinted_inputs`.
 Setting `skip_if_complete: false` on the map propagates to every clone.
 
 Clones are registered into the workflow's DAG as soon as the map builds them,
