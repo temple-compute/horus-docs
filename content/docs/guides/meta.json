@@ -9,6 +9,7 @@
     "writing-workflows-python",
     "fan-out-fan-in",
     "loops",
+    "shared-targets",
     "running-workflows",
     "packaging-workflows",
     "sanitizing-workflows",
