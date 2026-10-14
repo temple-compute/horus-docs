@@ -249,14 +249,19 @@ global across the whole run instead of resetting per dispatcher.
   workflow to `FAILED`. This is the historical behaviour.
 - **`continue`**: a failed task no longer aborts the run. The scheduler marks
   the failure's descendants as blocked so they are never dispatched, and lets
-  every other branch of the DAG run to completion. Once nothing more can become
-  ready, if anything failed it raises `WorkflowExecutionError` naming every
-  failed task, so the workflow still ends `FAILED`.
+  every other branch of the DAG run to completion. A `horus_map` task's clones
+  are independent too: one failing clone does not cancel its siblings, and the
+  map fails once they have all finished. Once nothing more can become ready, if
+  anything failed it raises `WorkflowExecutionError` naming every failed task,
+  so the workflow still ends `FAILED`.
 
 Either policy always ends a run with failures in `FAILED`; the policy only
-controls how much of the DAG runs first. Each newly blocked task emits a
-`HorusTaskEvent` naming the upstream failure, so the event bus and TUI have
-something to show without a new task status.
+controls how much of the DAG runs first. Under `continue`, each blocked task
+ends `SKIPPED` with `skip_reason: upstream_failed`, so a reader can tell it
+from a cache hit (`complete`) or an untaken branch (`inactive`). Unlike those,
+it does not count as satisfied: everything downstream of it is skipped too.
+Each newly blocked task also emits a `HorusTaskEvent` naming the upstream
+failure.
 
 ### `orchestrator_target`
 
