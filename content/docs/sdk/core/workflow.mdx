@@ -256,7 +256,10 @@ global across the whole run instead of resetting per dispatcher.
   so the workflow still ends `FAILED`.
 
 Either policy always ends a run with failures in `FAILED`; the policy only
-controls how much of the DAG runs first. Under `continue`, each blocked task
+controls how much of the DAG runs first. A map with `on_item_failure: drop`
+absorbs its clones' failures instead (see
+[When an item fails](/guides/fan-out-fan-in#when-an-item-fails)), so those
+alone do not fail the run. Under `continue`, each blocked task
 ends `SKIPPED` with `skip_reason: upstream_failed`, so a reader can tell it
 from a cache hit (`complete`) or an untaken branch (`inactive`). Unlike those,
 it does not count as satisfied: everything downstream of it is skipped too.

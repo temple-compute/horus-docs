@@ -29,7 +29,9 @@ failure_policy: fail_fast  # optional; fail_fast (default) or continue
   ends as `FAILED`, and the failed tasks are reported when it finishes.
 
 Either way a run with any failure ends `FAILED`. The policy only decides how
-much of the graph runs before that happens.
+much of the graph runs before that happens. The one exception is a map set to
+[`on_item_failure: drop`](/guides/fan-out-fan-in#when-an-item-fails): its
+failed items are dropped instead of failing the map, under either policy.
 
 ## Task
 

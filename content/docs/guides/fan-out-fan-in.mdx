@@ -100,6 +100,7 @@ horus run score_batches.yaml --trigger split
 | `over.as` | the id each item is created under on its clone; must not collide with a declared input or output |
 | `runtime` / `executor` | the body, run once per item |
 | `max_concurrency` | optional upper bound on how many clones are dispatched at once |
+| `on_item_failure` | `fail` (default) or `drop`; see [When an item fails](#when-an-item-fails) |
 
 The map must declare **exactly one output**, and it must be a `folder`. That
 folder is the fan-in point: it holds one subdirectory per item, and it is what
@@ -172,6 +173,80 @@ scored/
   02/scored.txt
 ```
 
+### Chained maps keep their slot names
+
+When a map iterates another map's folder output (the edge feeding its
+`over.input_id` comes from a `horus_map` task), it reuses the upstream slot
+names instead of numbering its items again. `report[02]` processes what
+`score[02]` produced. Without gaps the names are the same as plain indices,
+so nothing changes for an existing workflow. With gaps, for example after
+`score` [dropped](#when-an-item-fails) slot `01`, the downstream map has slots
+`00` and `02`, and every later item keeps its slot, its clone id, and its
+cached result.
+
+The rule depends on where the collection comes from, not on what the entries
+are called. A first map over a folder of files named `102202209`,
+`102202300`, ... still numbers its slots `0`, `1`, ...
+
+## When an item fails
+
+By default a failed clone fails the map. Under the default `fail_fast`
+[failure policy](/guides/writing-workflows-yaml#failure-policy), it also
+cancels the clones still running.
+
+When the items are independent, for example one sample each, set
+`on_item_failure: drop` on the map so one bad item does not stop the rest:
+
+```yaml
+  - id: score
+    kind: horus_map
+    on_item_failure: drop
+    # ...
+```
+
+With `drop`:
+
+- Every clone runs to the end. A failure does not cancel the siblings, under
+  either failure policy.
+- A failed clone stays `failed`, with its `error`, under its usual id
+  (`score[01]`).
+- Its slot directory is removed from the map's folder output, so downstream
+  tasks only see the items that succeeded. Logs survive as the clone's side
+  artifacts and events; files the clone left in its slot do not.
+- The map ends `completed` and emits one event listing what it dropped, one
+  line per item: the slot, the item's entry name, and the clone's error (at
+  most 20 items, then `+N more`; each error cut to 500 characters).
+- If **every** clone failed, the map fails as usual, so a downstream task never
+  receives an empty folder.
+- A cancel is never dropped: cancelling the run cancels the map.
+
+A dropped clone does not fail the run: a run whose only failures are dropped
+items ends `COMPLETED`. To tell such a run from a complete one, look for
+failed clones of a completed map: a dropped item is a clone `<map>[<slot>]`
+that ended `failed` while its map ended `completed`, a pair only `drop`
+produces. Any non-zero exit counts as an item failure,
+including a clone killed for running out of memory (exit 137), and so does a
+failure to place the clone or transfer its inputs.
+
+Only use `drop` when a missing item is an acceptable result. A map whose
+outputs are all needed later, such as shards merged back into one file,
+should keep the default.
+
+### Retrying dropped items
+
+A map that dropped items does not record its own manifest, and removes one
+left by an earlier run. The next run therefore runs the map again. When the
+working directory persists between runs (as with the `horus` CLI), the clones
+that succeeded skip on their own manifests, and only the dropped items run.
+Once nothing is dropped, the map records its manifest and skips as usual.
+
+### With the failure policy
+
+| | `on_item_failure: fail` | `on_item_failure: drop` |
+|---|---|---|
+| `fail_fast` | The first failed clone cancels its siblings and fails the run. | Clones run independently. A failed item is dropped, the map completes, and the run carries on. Only a map whose items all failed fails the run. |
+| `continue` | All clones finish, then the map fails and its downstream tasks end `skipped` with reason `upstream_failed`. | As with `fail_fast`. Failures elsewhere in the run still follow `continue`. |
+
 ## In Python
 
 Construct a `MapTask` like any other task and put it in the workflow's task
@@ -221,7 +296,10 @@ In Python the `as` field is spelled `item_id`, because `as` is a Python
 keyword. Both spellings validate, so a workflow authored in YAML and one
 built in Python round-trip through the same document.
 
-Pass `max_concurrency=N` to cap how many clones the map dispatches at once.
+Pass `max_concurrency=N` to cap how many clones the map dispatches at once,
+and `on_item_failure="drop"` to [drop failed items](#when-an-item-fails).
+After the run, a dropped item is a clone in `wf.tasks` with status `FAILED`
+whose map has status `COMPLETED`.
 
 ## Concurrency
 
@@ -299,7 +377,8 @@ class ShardedDataset(BaseArtifact[str], IterableArtifact):
 The contract:
 
 - Return a **deterministic** list of real artifacts. The map turns each one
-  into a clone input, so the order fixes the slot numbering.
+  into a clone input, so the order fixes the slot numbering. A map fed by
+  another map uses the last part of each item's path as the slot name.
 - Each item must be **materialized on `target`**, at the path the returned
   artifact carries. The map hands the item to its clone as an already-placed
   input, so a co-located clone reads it in place and a remote one transfers it
