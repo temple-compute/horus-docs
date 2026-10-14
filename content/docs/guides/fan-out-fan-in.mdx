@@ -213,18 +213,18 @@ With `drop`:
 - Its slot directory is removed from the map's folder output, so downstream
   tasks only see the items that succeeded. Logs survive as the clone's side
   artifacts and events; files the clone left in its slot do not.
-- The map ends `completed` and records what it dropped in `dropped_items`, a
-  list of `{slot, item, error}`: the slot name, the item's entry name, and the
-  clone's error. The list is empty when nothing was dropped, and reset each
-  time the map runs. The same list is registered as a JSON side artifact with
-  id `<map id>_dropped`, only when something was dropped.
+- The map ends `completed` and emits one event listing what it dropped, one
+  line per item: the slot, the item's entry name, and the clone's error (at
+  most 20 items, then `+N more`; each error cut to 500 characters).
 - If **every** clone failed, the map fails as usual, so a downstream task never
   receives an empty folder.
 - A cancel is never dropped: cancelling the run cancels the map.
 
 A dropped clone does not fail the run: a run whose only failures are dropped
-items ends `COMPLETED`. Read `dropped_items` on the map tasks to tell such a
-run from a complete one. Any non-zero exit counts as an item failure,
+items ends `COMPLETED`. To tell such a run from a complete one, look for
+failed clones of a completed map: a dropped item is a clone `<map>[<slot>]`
+that ended `failed` while its map ended `completed`, a pair only `drop`
+produces. Any non-zero exit counts as an item failure,
 including a clone killed for running out of memory (exit 137), and so does a
 failure to place the clone or transfer its inputs.
 
@@ -235,7 +235,8 @@ should keep the default.
 ### Retrying dropped items
 
 A map that dropped items does not record its own manifest, and removes one
-left by an earlier run. The next run therefore runs the map again: the clones
+left by an earlier run. The next run therefore runs the map again. When the
+working directory persists between runs (as with the `horus` CLI), the clones
 that succeeded skip on their own manifests, and only the dropped items run.
 Once nothing is dropped, the map records its manifest and skips as usual.
 
@@ -297,8 +298,8 @@ built in Python round-trip through the same document.
 
 Pass `max_concurrency=N` to cap how many clones the map dispatches at once,
 and `on_item_failure="drop"` to [drop failed items](#when-an-item-fails).
-After the run, `map_task.dropped_items` holds `DroppedItem` models
-(`horus_builtin.workflow.map.DroppedItem`).
+After the run, a dropped item is a clone in `wf.tasks` with status `FAILED`
+whose map has status `COMPLETED`.
 
 ## Concurrency
 
@@ -377,7 +378,7 @@ The contract:
 
 - Return a **deterministic** list of real artifacts. The map turns each one
   into a clone input, so the order fixes the slot numbering. A map fed by
-  another map uses the part of each item id after `:` as the slot name.
+  another map uses the last part of each item's path as the slot name.
 - Each item must be **materialized on `target`**, at the path the returned
   artifact carries. The map hands the item to its clone as an already-placed
   input, so a co-located clone reads it in place and a remote one transfers it
