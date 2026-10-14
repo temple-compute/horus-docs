@@ -240,6 +240,30 @@ descriptions translatable, use your plugin's own translator created with
 `horus_runtime`'s internal translator. See [SDK i18n guide](/sdk/i18n)
 for the recommended pattern.
 
+## Lease hooks
+
+A target used as a [shared target](/guides/shared-targets) may let the run
+release its machine early. The workflow's lease manager drives these members;
+the defaults make a target not releasable, so most targets ignore them.
+
+| Member | Default | Meaning |
+|--------|---------|---------|
+| `lease_key` | per-instance id | Identity of the declared target. Stable across shallow copies and map clones; a deep copy gets a new one. |
+| `releasable` | `False` | ClassVar. Whether the lease manager may release the machine early. |
+| `hold_timeout_s` | `None` | Seconds the machine may sit idle while members are still pending before it is drained and released. |
+| `member_cap` | `None` | Cap on members running at once on the machine. Named `member_cap` so a subclass field `max_parallel` is not shadowed. |
+| `generation` | `0` | Incremented once per successful provision. |
+| `on_ready(callback)` | no-op | Run `callback` once per generation, after the machine is ready and before any member dispatches. |
+| `keepalive()` | no-op | Called every 5 minutes while a member runs or the hold timer is armed. Must not raise. |
+| `release(reason)` | no-op | Destroy the machine. Idempotent, safe to call while provisioning, raises when the destroy fails. |
+
+`release` reasons are `done`, `drained`, `idle_cap`, `run_end`, `abort` and
+`failed`. Before calling `release`, the lease manager evacuates every output a
+pending task still needs through the registered `horus.evacuator` with the
+highest `priority`.
+
+The `terraform` target from horus-terraform implements these hooks.
+
 ## Built-in Target
 
 - `LocalTarget`: runs commands in the current machine
