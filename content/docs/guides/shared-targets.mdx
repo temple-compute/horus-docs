@@ -66,7 +66,9 @@ leasing; plugin authors can add it to their own targets through the
   watchdog does not destroy it.
 - Before release, every output a later task still needs is evacuated off the
   machine. By default outputs are copied to the orchestrator; a plugin can
-  register a different evacuator (for example, to object storage).
+  register a different evacuator (for example, to object storage). A target
+  whose outputs outlive the machine, such as a Slurm allocation on a shared
+  filesystem, skips this step.
 - If a member is still pending after release, a new machine (the next
   generation) is provisioned when that task is ready to run.
 - If a task needs an output that lived on a released machine and was not
