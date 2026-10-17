@@ -71,8 +71,21 @@ leasing; plugin authors can add it to their own targets through the
   filesystem, skips this step.
 - If a member is still pending after release, a new machine (the next
   generation) is provisioned when that task is ready to run.
-- If a task needs an output that lived on a released machine and was not
-  evacuated, it fails with `ArtifactLostError`.
+- If a task needs an output that lived on a released or lost machine and was
+  neither evacuated nor recovered, it fails with `ArtifactLostError`.
+
+## Lost machines
+
+A machine can go away mid-run, for example a spot reclaim or a crash. A task
+that loses its machine is not a task failure:
+
+- The task runs again on a new machine, once per run. A second loss fails it.
+- A running map re-stages its inputs on the new machine and re-runs the items
+  that finished on the lost one.
+- When the retry is spent, the lost items count as failed and the map's
+  [`on_item_failure`](/guides/fan-out-fan-in#when-an-item-fails) decides.
+- An output that lived only on the lost machine is read from another copy if
+  the evacuator has one, such as one in object storage.
 
 ## Parallel members
 
