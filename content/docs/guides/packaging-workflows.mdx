@@ -3,8 +3,6 @@ title: Packaging workflows
 description: Use horus package to zip a workflow and its referenced files so it can run on another machine.
 ---
 
-# Packaging workflows
-
 A workflow directory is already self-contained: every relative path in the YAML
 resolves against the directory holding it. `horus package` turns that directory
 into a zip carrying only the files the workflow actually references, so you can

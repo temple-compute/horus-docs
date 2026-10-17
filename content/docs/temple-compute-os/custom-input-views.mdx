@@ -1,0 +1,93 @@
+---
+title: Custom input views
+description: Give a workflow input its own editor, written as a single HTML page that ships with the workflow.
+---
+
+A workflow's root inputs are usually edited with whatever the UI has built in:
+a text editor, a file upload, a number field. A **custom input view** swaps that
+for an HTML page you write, such as a form, a sketcher or a picker, and whatever
+the page saves becomes the input's content. One HTML file can turn a workflow
+into a small application.
+
+The page is itself a root artifact of the workflow, so it travels with the
+workflow, and every run keeps the exact page its inputs were authored with.
+
+<Callout title="Editor feature">
+  The Temple Compute OS workflow editor reads this binding; the Horus runtime
+  does not. To Horus, the page is an ordinary file artifact and `view` is an
+  ordinary [`labels`](/sdk/core/artifact) entry.
+</Callout>
+
+## Binding a page to an input
+
+Add the page as a root artifact whose path ends in `.html`. Then set the label
+`view` on the input to that page's artifact id:
+
+```yaml
+artifacts:
+  - id: settings_form
+    kind: file
+    path: views/settings.html
+
+  - id: settings
+    kind: file
+    path: configs/settings.json
+    labels:
+      view: settings_form
+```
+
+In the editor, you get the same result by editing the input and picking the
+page under **Custom view**. The page then renders in place of the input's
+normal viewer: in the node preview, the fullscreen view and the inspector.
+**Open with** still switches back to the built-in viewers.
+
+A view works for file inputs and for value artifacts (`number`, `boolean`,
+`string`).
+
+## Example: a settings form
+
+This page edits a JSON input through a form:
+
+```html
+<!doctype html>
+<form id="f">
+  <label>Temperature (K) <input name="temperature" type="number" step="any"></label>
+  <label>Steps <input name="steps" type="number"></label>
+  <button>Save</button> <span id="status"></span>
+</form>
+<script>
+  const form = document.getElementById("f")
+  const status = document.getElementById("status")
+
+  window.addEventListener("message", ({ data }) => {
+    if (data?.tc === "init") {
+      const current = data.text ? JSON.parse(data.text) : {}
+      for (const [key, value] of Object.entries(current)) {
+        if (form.elements[key]) form.elements[key].value = value
+      }
+      form.querySelector("button").disabled = !data.editable
+    }
+    if (data?.tc === "saved") status.textContent = "Saved"
+    if (data?.tc === "error") status.textContent = data.message
+  })
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault()
+    const body = Object.fromEntries(new FormData(form))
+    parent.postMessage({ tc: "save", text: JSON.stringify(body, null, 2) }, "*")
+  })
+</script>
+```
+
+The messages the page can send and receive are listed in the
+[custom view protocol](/temple-compute-os/custom-view-protocol).
+
+## Limits
+
+- The page must be a single self-contained file. Load libraries from absolute
+  CDN URLs, because relative paths have nothing to resolve against.
+- A page only edits the input it is bound to. It cannot read other artifacts or
+  the outputs of earlier runs.
+- Inputs are edited before a run starts. To ask the user something while a
+  task is running, use [interactions](/guides/writing-workflows-python).
+- The page renders at a fixed height and does not resize to fit its content.
