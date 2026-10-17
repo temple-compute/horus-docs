@@ -14,6 +14,7 @@
     "fan-out-fan-in",
     "loops",
     "---Running and sharing---",
+    "shared-targets",
     "running-workflows",
     "packaging-workflows",
     "sanitizing-workflows",

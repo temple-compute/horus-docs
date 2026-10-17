@@ -42,8 +42,9 @@ ctx.bus.emit(MyEvent(message="something happened"))
 | Method                     | Description                                                                                                                       |
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | `start()`                  | Instantiates all registered transports and subscribers, calls `setup()` on each subscriber, and starts the background async loop. |
-| `stop()`                   | Gracefully shuts down all transports by awaiting their `stop()` coroutines, then stops the background thread.                     |
-| `emit(event)`              | Dispatches the event synchronously to subscribers, then submits it to transports.                                                 |
+| `stop()`                   | Flushes pending publishes, shuts down all transports by awaiting their `stop()` coroutines, then stops the background thread.     |
+| `emit(event)`              | Dispatches the event synchronously to subscribers, then submits it to transports without waiting for them to publish.             |
+| `flush(timeout=None)`      | Blocks until every event emitted so far has been published (or failed), giving up after `timeout` seconds.                        |
 | `subscribe(subscriber)`    | Registers a subscriber manually.                                                                                                  |
 | `add_transport(transport)` | Registers a transport manually.                                                                                                   |
 

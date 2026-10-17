@@ -247,14 +247,22 @@ global across the whole run instead of resetting per dispatcher.
   workflow to `FAILED`. This is the historical behaviour.
 - **`continue`**: a failed task no longer aborts the run. The scheduler marks
   the failure's descendants as blocked so they are never dispatched, and lets
-  every other branch of the DAG run to completion. Once nothing more can become
-  ready, if anything failed it raises `WorkflowExecutionError` naming every
-  failed task, so the workflow still ends `FAILED`.
+  every other branch of the DAG run to completion. A `horus_map` task's clones
+  are independent too: one failing clone does not cancel its siblings, and the
+  map fails once they have all finished. Once nothing more can become ready, if
+  anything failed it raises `WorkflowExecutionError` naming every failed task,
+  so the workflow still ends `FAILED`.
 
 Either policy always ends a run with failures in `FAILED`; the policy only
-controls how much of the DAG runs first. Each newly blocked task emits a
-`HorusTaskEvent` naming the upstream failure, so the event bus and TUI have
-something to show without a new task status.
+controls how much of the DAG runs first. A map with `on_item_failure: drop`
+absorbs its clones' failures instead (see
+[When an item fails](/guides/fan-out-fan-in#when-an-item-fails)), so those
+alone do not fail the run. Under `continue`, each blocked task
+ends `SKIPPED` with `skip_reason: upstream_failed`, so a reader can tell it
+from a cache hit (`complete`) or an untaken branch (`inactive`). Unlike those,
+it does not count as satisfied: everything downstream of it is skipped too.
+Each newly blocked task also emits a `HorusTaskEvent` naming the upstream
+failure.
 
 ### `orchestrator_target`
 
@@ -281,6 +289,11 @@ Called by `_run()` implementations before each `task.target.dispatch(task)`. It:
 `_run()` builds the edge source map once and passes it to every
 `transfer_artifacts()` call via the optional `source_map` argument; omitting it
 rebuilds the map on demand.
+
+Before transferring, the scheduler asks the task whether it is already
+complete using `source_digests()`, the digest of each input at its source. A
+task that is complete is skipped with no transfer at all; see
+[incremental skipping](/sdk/core/task#horustask).
 
 See [Transfer Strategy](/sdk/core/transfer) for details.
 
@@ -433,12 +446,18 @@ Every run is initiated by a **trigger**: the `id` of one task in the workflow,
 passed to `run(trigger_id=...)`. The trigger scopes which tasks run, a workflow
 rarely needs to execute its entire graph on every run.
 
-Given a trigger, the execution plan is the trigger task plus:
+Given a trigger, the execution plan is:
 
-- its **ancestors**: every upstream task needed to produce the trigger's
-  inputs, walked transitively; and
-- its **descendants**: every downstream task that (directly or transitively)
-  consumes the trigger's outputs.
+- its **descendants**: the trigger itself and every downstream task that
+  (directly or transitively) depends on it; and
+- the **ancestors of those descendants**: every upstream task any of them
+  needs, walked transitively. This includes the trigger's own ancestors, and
+  also the other parents of a downstream join.
+
+For example, with edges `setup -> fetch`, `fetch -> report` and
+`cleanup -> fetch`, triggering `setup` runs all four tasks: `fetch` cannot
+start until `cleanup` has run, even though `cleanup` is neither upstream nor
+downstream of `setup`.
 
 Unrelated branches of the graph are excluded entirely. Within that scope, tasks
 still run in topological order, and any ancestor whose outputs already exist is
@@ -448,6 +467,11 @@ upstream work is not redundantly recomputed.
 Passing a `trigger_id` that does not correspond to a task in the workflow raises
 `UnknownTaskError` (from `execution_plan`). `HorusWorkflow._run` likewise rejects
 an unknown trigger before planning.
+
+If the scheduler reaches a point where nothing is ready or running but tasks in
+scope are still neither completed, blocked nor failed, the run fails instead of
+reporting success: a cycle raises `CyclicDependencyError`, anything else raises
+`StalledWorkflowError` naming the stuck tasks.
 
 ## Mutating the DAG at runtime
 

@@ -160,6 +160,95 @@ strategies (like `LocalNoOpTransfer` or a plugin's SSH transfer) therefore alway
 take precedence, so you only write a custom strategy when you need transport that
 is faster or smarter than the generic package-and-stream path.
 
+## Transfer Events
+
+Every input transfer started by `transfer_artifacts()` is reported on the
+[event bus](/sdk/event_system) as a `TransferEvent`
+(`horus_runtime.core.transfer.events`), so a subscriber or UI can show data
+moving along each workflow edge.
+
+`TransferEvent` has `event_type = "artifact_transfer"` and is emitted at
+`DEBUG` level, so it stays out of `INFO` logs.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `phase` | `"started" \| "progress" \| "finished" \| "failed"` | Point in the transfer lifecycle |
+| `task_id` | `str` | Consuming task whose input is being staged |
+| `input_id` | `str` | Consumer input id (the output id for a cache restore) |
+| `source_task_id` | `str \| None` | Producing task, or `None` for a root artifact |
+| `source_artifact_id` | `str` | Artifact id on the source side |
+| `strategy` | `str \| None` | Class name of the strategy that ran |
+| `same_location` | `bool` | Source and destination share a `location_id` (nothing is moved) |
+| `is_value` | `bool` | The artifact is a value artifact |
+| `cache_restore` | `bool` | Restore of one of `task_id`'s own outputs from the artifact cache, not an edge |
+| `stage` | `"packaging" \| "transferring" \| "uploading" \| "unpacking" \| None` | Current stage (`progress` only) |
+| `fraction` | `float \| None` | `0.0`–`1.0`, only when the byte total is known |
+| `bytes_done` / `bytes_total` | `int \| None` | Byte counts, when the strategy reports them |
+
+`task_id`, `input_id` and `source_task_id` identify exactly one workflow edge.
+
+### Phases
+
+The workflow wraps each `strategy.transfer(...)` call in
+`transfer_scope(template)`:
+
+- `started` is emitted before the strategy runs
+- `progress` is emitted whenever the strategy calls `report_transfer_progress`
+- `finished` is emitted when the strategy returns
+- `failed` is emitted when the strategy raises an `Exception` (the error is re-raised)
+
+A cancelled transfer emits nothing after `started`; consumers should drop open
+transfers when the run ends.
+
+Each event is a distinct event with its own `event_id` and `timestamp`.
+
+### Reporting Progress From a Custom Strategy
+
+Strategies do not need to know which task or edge they serve. Call
+`report_transfer_progress()` from `_transfer()` and the active scope fills in the
+rest:
+
+```python
+from horus_runtime.core.transfer.events import report_transfer_progress
+
+
+class LocalToSSHTransfer(BaseTransferStrategy[LocalTarget, SSHTarget]):
+    handles_source = LocalTarget
+    handles_destination = SSHTarget
+
+    async def _transfer(self, artifact, source, destination) -> None:
+        report_transfer_progress(stage="packaging")
+        package = await self._package(artifact)
+
+        total = package.stat().st_size
+
+        def on_chunk(sent: int) -> None:
+            report_transfer_progress(stage="uploading", done=sent, total=total)
+
+        await self._upload(package, destination, callback=on_chunk)
+
+        report_transfer_progress(stage="unpacking")
+        await self._unpack(artifact, destination)
+```
+
+- `stage`, `done` and `total` are all optional; `done`/`total` are bytes and
+  `fraction` is derived only when `total > 0`
+- calls are throttled to roughly one event per 0.25 s per transfer; a stage
+  change or reaching `fraction == 1.0` always emits, so it is safe to call from a
+  per-chunk callback
+- outside a `transfer_scope` (e.g. calling `strategy.transfer()` directly) or
+  without a booted `HorusContext`, it is a no-op
+
+The built-in [`GenericTransfer`](#generictransfer) reports the `packaging`,
+`transferring` and `unpacking` stages.
+
+### Silent Hand-offs
+
+Only workflow edges are reported. Internal hand-offs that are not edges emit no
+`TransferEvent`: a [map task](/guides/fan-out-fan-in) feeding its clones builds
+its sources with `EdgeSource(..., report=False)`, since one event per clone and
+input would flood the bus.
+
 ## Exceptions
 
 | Exception | When raised |

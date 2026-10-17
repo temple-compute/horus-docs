@@ -1,0 +1,94 @@
+---
+title: Shared targets
+---
+
+# Shared targets
+
+Declare a target once under the workflow's `targets:` section and point tasks
+at it with `target: { ref: <name> }`. Every task with the same ref runs on the
+same target instance, so a group of tasks can share one machine.
+
+```yaml
+kind: horus_workflow
+targets:
+  heavy:
+    kind: terraform
+    instance_type: r6i.2xlarge
+    hold_timeout_minutes: 30
+    max_parallel: 2
+tasks:
+  - id: align
+    target: { ref: heavy }
+    # ...
+  - id: call_variants
+    target: { ref: heavy }
+    # ...
+  - id: report
+    target: { kind: local, working_directory: "./horus-work" }
+    # ...
+```
+
+`align` and `call_variants` share one machine. `report` keeps its inline
+target, which works as before.
+
+## Rules
+
+- Names match `^[a-z][a-z0-9_-]{0,62}$`.
+- Entries under `targets:` are full targets. A `{ ref }` there is an error.
+- A ref is exactly `{ ref: <name> }`. Adding any other key, `kind` included,
+  is an error.
+- Refs resolve lexically: a task inside a subworkflow sees the subworkflow's
+  own `targets:` first, then those of each enclosing workflow.
+- Refs are accepted on top-level tasks, map tasks and subworkflow tasks. They
+  are rejected inside a loop body; use an inline target there.
+- A ref to an unknown name is an error.
+
+Refs work with every target kind. For a target that cannot be released early,
+such as `ssh` or `local`, a ref is just one place to declare the host. Leasing,
+described below, only applies to releasable targets.
+
+## Leases
+
+A releasable target is a machine the run creates and destroys. The
+`terraform` target from horus-terraform is the first target that implements
+leasing; plugin authors can add it to their own targets through the
+[lease hooks](/sdk/core/target#lease-hooks).
+
+- The machine is created when the first member task needs it.
+- It is held while any member task is still pending. Tasks elsewhere that
+  still need one of its outputs also hold it.
+- When no member is running but members are still pending (for example, they
+  wait on a task on another machine), the machine stays up for at most
+  `hold_timeout_minutes`. Default `30`, maximum `120`, `0` releases as soon as
+  no member runs.
+- While a member runs or the hold timer is armed, the runtime calls the
+  target's keepalive every 5 minutes, so the target's own idle or lifetime
+  watchdog does not destroy it.
+- Before release, every output a later task still needs is evacuated off the
+  machine. By default outputs are copied to the orchestrator; a plugin can
+  register a different evacuator (for example, to object storage). A target
+  whose outputs outlive the machine, such as a Slurm allocation on a shared
+  filesystem, skips this step.
+- If a member is still pending after release, a new machine (the next
+  generation) is provisioned when that task is ready to run.
+- If a task needs an output that lived on a released or lost machine and was
+  neither evacuated nor recovered, it fails with `ArtifactLostError`.
+
+## Lost machines
+
+A machine can go away mid-run, for example a spot reclaim or a crash. A task
+that loses its machine is not a task failure:
+
+- The task runs again on a new machine, once per run. A second loss fails it.
+- A running map re-stages its inputs on the new machine and re-runs the items
+  that finished on the lost one.
+- When the retry is spent, the lost items count as failed and the map's
+  [`on_item_failure`](/guides/fan-out-fan-in#when-an-item-fails) decides.
+- An output that lived only on the lost machine is read from another copy if
+  the evacuator has one, such as one in object storage.
+
+## Parallel members
+
+`max_parallel` caps how many members, map clones included, run on the machine
+at once. Unset means no cap beyond a map's `max_concurrency` and the
+workflow's [`capacity`](/sdk/core/workflow#capacity). Extra members wait for a free slot.
