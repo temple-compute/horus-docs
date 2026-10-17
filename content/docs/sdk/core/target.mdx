@@ -263,6 +263,14 @@ the defaults make a target not releasable, so most targets ignore them.
 pending task still needs through the registered `horus.evacuator` with the
 highest `priority`. A target with `keeps_data_on_release` skips this step.
 
+When the machine is gone mid-task (reclaimed, crashed, unreachable), raise
+`TargetLostError` from `horus_runtime.core.task.exceptions` instead of a plain
+error. The task is then retried once on a new generation; any other error
+still fails it. When a later task needs an output from a lost generation, the
+lease manager calls the evacuator's `recover(task, output)`. Override it in a
+`BaseEvacuator` to return an `EdgeSource` for another copy of the output, or
+`None` if there is none. It must not touch the lost machine.
+
 The `terraform` target from horus-terraform implements these hooks.
 
 ## Built-in Target
