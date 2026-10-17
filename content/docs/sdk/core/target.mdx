@@ -250,6 +250,7 @@ the defaults make a target not releasable, so most targets ignore them.
 |--------|---------|---------|
 | `lease_key` | per-instance id | Identity of the declared target. Stable across shallow copies and map clones; a deep copy gets a new one. |
 | `releasable` | `False` | ClassVar. Whether the lease manager may release the machine early. |
+| `keeps_data_on_release` | `False` | ClassVar. Whether outputs stay readable after `release`, for example on a cluster's shared filesystem. If set, release skips the evacuation and never raises `ArtifactLostError`. |
 | `hold_timeout_s` | `None` | Seconds the machine may sit idle while members are still pending before it is drained and released. |
 | `member_cap` | `None` | Cap on members running at once on the machine. Named `member_cap` so a subclass field `max_parallel` is not shadowed. |
 | `generation` | `0` | Incremented once per successful provision. |
@@ -260,7 +261,7 @@ the defaults make a target not releasable, so most targets ignore them.
 `release` reasons are `done`, `drained`, `idle_cap`, `run_end`, `abort` and
 `failed`. Before calling `release`, the lease manager evacuates every output a
 pending task still needs through the registered `horus.evacuator` with the
-highest `priority`.
+highest `priority`. A target with `keeps_data_on_release` skips this step.
 
 The `terraform` target from horus-terraform implements these hooks.
 
