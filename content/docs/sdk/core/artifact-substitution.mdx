@@ -145,7 +145,7 @@ artifact ids, so ids must be valid Python identifiers.
 ## Value artifacts render their value
 
 A [value artifact](/sdk/core/artifact#value-artifacts) — `NumberArtifact`,
-`BooleanArtifact`, `StringArtifact`, `ChoiceArtifact`, or your own `ValueArtifact` subclass —
+`BooleanArtifact`, `StringArtifact`, `ChoiceArtifact`, `MultiChoiceArtifact`, `ListArtifact`, or your own `ValueArtifact` subclass —
 resolves `$id` to its authored `value`, not to a path. A task consuming
 `$samples` gets `10`, not the path of a file whose contents happen to be `10`:
 
@@ -168,6 +168,11 @@ renders its mapped value instead: `--device $device` becomes `--device gpu`.
 A `ChoiceArtifact` renders the picked option's value, not its label: with
 options `cpu` / `gpu` (labels `CPU` / `GPU`), `--device $device` renders
 `--device gpu`.
+
+A `MultiChoiceArtifact` or `ListArtifact` renders its items as space-separated,
+shell-quoted words: with `value: [1, 2, "a b"]`, `--seeds $seeds` renders
+`--seeds 1 2 'a b'`. The file at `${seeds.path}` is a JSON array; read it from
+Python code templates instead of using `$seeds`.
 
 <Callout type="warn" title={<><code>$id</code> is no longer a path here</>}>
 

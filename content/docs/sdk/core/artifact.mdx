@@ -239,6 +239,14 @@ samples.materialize()
 samples.read()  # 10
 ```
 
+Optional limits: `min` and `max` are inclusive, and `step` counts from `min`
+(or 0), with a small float tolerance so `0.3` fits a `0.1` step. `step: 1`
+with an integer `min` allows only integers. An unset `value` starts at `min`.
+
+```yaml
+- {id: temp, kind: number, path: temp.json, value: 300, min: 250, max: 400, step: 5}
+```
+
 ### `BooleanArtifact`
 
 A `bool`, materialized as a JSON boolean (`true` / `false`). Defaults to `False`.
@@ -310,6 +318,15 @@ from horus_builtin.artifact.string import StringArtifact
 label = StringArtifact(id="label", path="label.txt", value="baseline")
 ```
 
+Optional limits: `pattern` is a Python regex that must match the whole value
+(single-quote it in YAML so backslashes survive), `max_length` counts
+characters, and `multiline` only switches the editor to a text area.
+
+```yaml
+- {id: pdb, kind: string, path: pdb.txt, value: 1abc, pattern: '[0-9][a-z0-9]{3}'}
+- {id: notes, kind: string, path: notes.txt, value: "", max_length: 500, multiline: true}
+```
+
 ### `ChoiceArtifact`
 
 A value picked from a fixed list of `options`, each a `{value, label}` pair:
@@ -338,6 +355,35 @@ or in a workflow YAML:
     - {value: gpu, label: GPU}
   value: gpu
 ```
+
+### `MultiChoiceArtifact`
+
+Any subset of `options` (same `{value, label}` rules as `ChoiceArtifact`).
+The value is a list kept in option order, empty by default, materialized as a
+JSON array. Reads and writes check every item, as for `ChoiceArtifact`.
+
+```yaml
+- id: elements
+  kind: multichoice
+  path: elements.json
+  options: [{value: H}, {value: C}, {value: O, label: Oxygen}]
+  value: [H, O]
+```
+
+### `ListArtifact`
+
+A free list of strings or numbers, empty by default, materialized as a JSON
+array.
+
+```yaml
+- {id: seeds, kind: list, path: seeds.json, value: [1, 2, 3]}
+```
+
+Limits on value artifacts (`min`, `max`, `step`, `pattern`, `max_length`, and
+the options of `choice` / `multichoice`) are checked when the value is loaded
+or authored. Values a producer task writes are not checked against them,
+except for `choice` and `multichoice`. Quote option values YAML would read as
+booleans (`"yes"`, `"on"`).
 
 A command `run --device $device` renders `run --device gpu` — the value, never
 the label. Validation rejects an empty `options` list, duplicate values
