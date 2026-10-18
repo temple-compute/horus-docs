@@ -31,6 +31,38 @@ the directory would exist at the old path and the executor would launch with a
 No built-in middleware relies on the directory existing during `before`. If
 yours does, create it yourself rather than assuming.
 
+## Bound Task Middleware
+
+```python
+@dataclass
+class BoundTaskMiddlewareContext:
+    task: BaseTask
+    target: BaseTarget
+    input_digests: InputDigests
+```
+
+Entered by the scheduler for each attempt of a task on its acquired target,
+after the task is bound to it and before the completion check. It wraps the
+check, the input transfers, dispatch and wait.
+
+Unlike Task Middleware, it runs for every placed task, including tasks that end
+up skipped as complete, on every target kind. Use it for work that has to land
+on the target before Horus decides whether the task is complete, such as
+restoring cached outputs.
+
+- `context.target is context.task.target`. On a node that is provisioned on
+  first use, the first command in `before` provisions it.
+- A node lost during the attempt re-binds the task and wraps the retry again,
+  so `before` runs once per node. Raise `TargetLostError` from `before` to get
+  that retry instead of swallowing it.
+- `input_digests` returns the input digests the completion check uses. It is
+  computed on the first await and shared with the check. Pass it to
+  `task.manifest_matches(manifest, input_digests)` to know whether a stored
+  completion manifest still matches before downloading anything.
+- `after` must not raise: its exception would replace the attempt's.
+
+Register it under the `horus.middleware.bound_task` entry point group.
+
 ## Workflow Middleware
 
 ```python
