@@ -63,6 +63,33 @@ restoring cached outputs.
 
 Register it under the `horus.middleware.bound_task` entry point group.
 
+## Task Skip Middleware
+
+```python
+@dataclass
+class TaskSkipMiddlewareContext:
+    task: BaseTask
+    workflow: BaseWorkflow
+    input_digests: InputDigests
+    complete: bool = False
+```
+
+Entered by the scheduler once per placed task, before its lease slot,
+placement and pool slot. Use it to skip a task from metadata alone, such as a
+cached task whose outputs are only fetched when a running task consumes them.
+
+- Set `context.complete = True` in `before` to skip the task as complete. It is
+  ignored when `task.skip_if_complete` is false.
+- Only skip a task whose outputs can be read without it, for example relocated
+  with `workflow.relocate_output`. The task never reaches its machine.
+- `input_digests` digests inputs at their source. It is shared with the
+  bound-task middleware and the first completion check. A pinned input is
+  digested on `task.target`, which is not bound yet, so don't await it for a
+  task with one.
+- Not entered again on a node-loss retry. An exception fails the task.
+
+Register it under the `horus.middleware.task_skip` entry point group.
+
 ## Workflow Middleware
 
 ```python
