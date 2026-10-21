@@ -214,15 +214,17 @@ every other respect.
   `model_dump`, so a workflow document can carry a value whose bytes have not
   been written yet.
 
-and overrides `materialize()` to write that value to `path`. The override is
-**idempotent**: once the file exists it is left alone, so an uploaded blob, or a
-value a producer task already wrote, is never clobbered by the declared one.
+and overrides `materialize()` to write that value to `path`. The authored value
+is the source of truth: a file left by an earlier run with another value is
+rewritten, so editing only a value re-runs its consumer. A file that already
+holds the value is left untouched. Only a root is materialized, so a value a
+producer task wrote is never overwritten.
 
 The graph does not distinguish the two cases. A `NumberArtifact` produced by a
 task is transferred to its consumer exactly like a `NumberArtifact` root whose
 value you typed. The only runtime difference is that a root value artifact has
 no producer, so [`transfer_artifacts`](/sdk/core/workflow) calls `materialize()`
-on it the first time a consumer needs it — and copies the root's value onto the
+on it whenever a consumer needs it — and copies the root's value onto the
 consumer's own input artifact, so that substitution sees the authored value
 rather than the field default. When the consumer is of the same kind, the fields that
 qualify the value (a boolean's `on` / `off` mapping) are copied along with it.
