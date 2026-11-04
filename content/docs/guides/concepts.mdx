@@ -37,6 +37,11 @@ a runtime or executor reads directly, such as a `python_script` task's script:
 editing the script invalidates the cache and the task re-runs, even though
 its path did not change.
 
+Every declared output is required. If a task's command exits successfully
+but one of its outputs is not at its declared path, the task fails and names
+the missing outputs. Check paths that a tool might change, for example a
+plotting library that adds `.png` to a file name without an extension.
+
 In a command you reference an artifact's path with `$id` substitution. For
 example, `echo hi > $result` writes to the artifact whose id is `result`. See
 [artifact substitution](/sdk/core/artifact-substitution) for the full
