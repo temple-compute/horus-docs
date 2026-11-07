@@ -82,7 +82,9 @@ Two knobs bound the concurrency:
 - **`max_concurrency`** (a workflow field, unbounded by default) caps how many
   tasks may run at once. A workflow that reuses a single-slot target across many
   placements still runs them concurrently: the scheduler hands each concurrent
-  use its own copy of the target (same machine, same filesystem).
+  use its own copy of the target (same machine, same filesystem). Maps and
+  their clones are not counted; see
+  [Concurrency](/guides/fan-out-fan-in#concurrency).
 - **`capacity`** gates concurrency against finite resources per machine. See
   [resource-aware placement](/guides/writing-workflows-yaml#resources-optional) if
   your tasks declare `resources`.
