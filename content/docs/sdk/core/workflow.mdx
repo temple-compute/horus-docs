@@ -61,6 +61,7 @@ class BaseWorkflow(AutoRegistry, entry_point="workflow"):
     capacity: dict[str, ResourceCapacity] | None = None
     failure_policy: Literal["fail_fast", "continue"] = "fail_fast"
     max_concurrency: int | None = None
+    cache: Literal["deep", "fast"] = "deep"
     status: WorkflowStatus = WorkflowStatus.IDLE
 
     @classmethod

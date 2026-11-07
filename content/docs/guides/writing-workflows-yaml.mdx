@@ -13,6 +13,7 @@ kind: horus_workflow     # required; selects the built-in workflow
 tasks: []                # the list of tasks (below)
 edges: []                # dependencies between tasks (below)
 failure_policy: fail_fast  # optional; fail_fast (default) or continue
+cache: deep              # optional; deep (default) or fast
 ```
 
 ### Failure policy
@@ -31,6 +32,38 @@ much of the graph runs before that happens. The one exception is a map set to
 [`on_item_failure: drop`](/guides/fan-out-fan-in#when-an-item-fails): its
 failed items are dropped instead of failing the map, under either policy.
 
+### Cache mode
+
+`cache` sets how a task checks whether its inputs changed since its last run.
+Set it on the workflow for every task, or on a task to override it.
+
+- **`deep`** (default): hashes every byte of every input. Safe, but a large
+  input is read again on each run.
+- **`fast`**: hashes each file's path, size and mtime in whole seconds, plus
+  the content of files under 1 MiB. Large files are not read.
+
+`fast` can be wrong in two ways:
+
+- A rewrite with the same size in the same second is not seen, so the task is
+  skipped. This does not apply to an input written by a task of the same run:
+  it always counts as changed, so its consumers re-run even if the producer
+  wrote the same bytes.
+- A `touch`, or a copy that does not keep mtime, re-runs the task. Copy inputs
+  with `cp -p` or `rsync -t`. Copies the runtime makes keep mtime. On NFS,
+  another host's write can show a stale mtime for a short time.
+
+A map's clones use the map's `cache`. For a subworkflow, set `cache` inside
+`sub:`; for a loop, inside `loop.body`. Switching a task's mode re-runs it
+once.
+
+Each input is digested once per run, not once per task that reads it.
+
+<Callout type="info">
+  Upgrading to runtime 0.9.0 changes the folder digest format. Every task with
+  a folder input runs once again after the upgrade. Tasks with only file inputs
+  do not.
+</Callout>
+
 ## Task
 
 ```yaml
@@ -45,6 +78,7 @@ tasks:
     outputs: [ ... ]      # artifacts this task produces
     resources: { ... }   # optional compute hints
     skip_if_complete: true   # skip when outputs already exist (default true)
+    cache: fast              # optional; deep or fast (default: the workflow's)
 ```
 
 ### Runtimes: what to run

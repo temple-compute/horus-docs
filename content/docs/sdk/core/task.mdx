@@ -55,6 +55,7 @@ class BaseTask(AutoRegistry, entry_point="task"):
     error: str | None = None
     runs: int = 0
     skip_if_complete: bool = True
+    cache: Literal["deep", "fast"] | None = None
     interaction: BaseInteractionTransport | None = None
     side_artifacts: list[BaseArtifact] = Field(default_factory=list)
     resources: ResourceRequest | None = None
@@ -266,14 +267,18 @@ editing the file invalidates the cache even though the path on disk did not
 change. `BaseRuntime.local_files()` and `BaseExecutor.local_files()` both
 default to `[]`.
 
-A folder input is digested by its contents: the sorted sha256 and relative
-path of every file in it. Editing, adding, removing or renaming any file in
-the folder invalidates the cache, so a task fed by a folder an upstream task
-rewrote runs again.
+A folder input is digested from every file in it, by relative path and
+digest. Editing, adding, removing or renaming any file in the folder
+invalidates the cache, so a task fed by a folder an upstream task rewrote runs
+again. How a file is digested follows the task's `cache` mode (`None` means
+the workflow's): `"deep"` hashes its content, `"fast"` its size and mtime in
+whole seconds plus the content of files under 1 MiB. Each input is digested
+once per run.
 
 The workflow checks this before staging anything on the task's target. It
-digests each input where it currently lives (a digest depends only on content,
-so it equals the digest of the staged copy) and, when the outputs exist and
+digests each input where it currently lives (a digest does not depend on
+where the copy lives, and runtime copies keep mtime, so it equals the digest
+of the staged copy) and, when the outputs exist and
 the fingerprint still matches, skips the task without transferring its inputs
 or dispatching it. If an input cannot be digested at its source, the task is
 not skipped early: its inputs are transferred and `run()` checks completion as
