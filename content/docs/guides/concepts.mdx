@@ -35,7 +35,9 @@ A task is only skipped while its inputs and its own configuration are
 unchanged since the run that produced its outputs. That includes local files
 a runtime or executor reads directly, such as a `python_script` task's script:
 editing the script invalidates the cache and the task re-runs, even though
-its path did not change.
+its path did not change. Inputs are compared by content by default; set
+[`cache: fast`](/guides/writing-workflows-yaml#cache-mode) to compare large
+files by size and modification time instead of reading them.
 
 Every declared output is required. If a task's command exits successfully
 but one of its outputs is not at its declared path, the task fails and names
