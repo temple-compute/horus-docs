@@ -99,6 +99,9 @@ horus run score_batches.yaml --trigger split
 | `runtime` / `executor` | the body, run once per item |
 | `max_concurrency` | optional upper bound on how many clones are dispatched at once |
 | `on_item_failure` | `fail` (default) or `drop`; see [When an item fails](#when-an-item-fails) |
+| `chain` | `true` starts each item as soon as its source map has it; see [Running items through maps](#running-items-through-maps) |
+| `zip` | more map outputs paired by item, `[{input_id, as}]` |
+| `drop_exit_codes` | exit codes (1 to 255) that drop an item instead of failing it |
 
 The map must declare **exactly one output**, and it must be a `folder`. That
 folder is the fan-in point: it holds one subdirectory per item, and it is what
@@ -186,6 +189,117 @@ The rule depends on where the collection comes from, not on what the entries
 are called. A first map over a folder of files named `102202209`,
 `102202300`, ... still numbers its slots `0`, `1`, ...
 
+Every map fed from one head map therefore shares one item space: slot `03` is
+the same item all the way down. If the head's collection changes (an item
+added or removed, or the count crosses 10, 100, ...), the later items get new
+slot names and run again down the chain.
+
+## Running items through maps
+
+By default a map fed by another map waits until that map has finished. Three
+fields let items flow through a chain of maps instead.
+
+### `chain`: start each item when it is ready
+
+With `chain: true`, clone `B[X]` starts as soon as `A[X]` is done, while A's
+other items still run. In a molecular dynamics workflow, each replica runs
+equilibrate, then produce, then analyze, and no replica waits for the slowest
+equilibration:
+
+```yaml
+tasks:
+  - id: equilibrate
+    kind: horus_map
+    over: { input_id: replicas_in, as: slot }
+    # ... writes $equilibrated, one slot per replica
+
+  - id: produce
+    name: Run production MD per replica
+    kind: horus_map
+    chain: true
+    over: { input_id: equilibrated_in, as: slot }
+    inputs:
+      - { kind: folder, id: equilibrated_in, path: "equilibrated_in" }
+    outputs:
+      - { kind: folder, id: produced, path: "produced" }
+    runtime:
+      kind: command
+      command: "bash $slot/production.sh $slot $produced"
+    executor: { kind: shell }
+
+edges:
+  - { source: equilibrate, source_output: equilibrated, target: produce, target_input: equilibrated_in }
+```
+
+A chained map is checked when the workflow loads:
+
+- `over` and every `zip` input must come from a map through an edge.
+- A command body reads a streamed input only through its `as` id, because the
+  whole folder is not there yet. `$<input id>`, `${task.inputs}` and
+  `${task.inputs.<streamed id>}` are rejected. Outputs, other inputs and other
+  `${task...}` names are fine.
+- A Python body is not checked. It must read only its `as` parameter.
+- An edge from a chained source cannot have a `condition`.
+- No other input of the map can take a chained source's whole output.
+
+A chained map keeps each source map's machine until its own last item has read
+from it, so a slow consumer keeps a fast source's machine running.
+
+### `zip`: pair more inputs by item
+
+`zip` binds slot X of another map's output in clone X, next to the `over`
+item. Each zip input must come from a map in the same item space. It works
+with or without `chain`:
+
+```yaml
+  - id: report_qc
+    name: Report QC per sample
+    kind: horus_map
+    over: { input_id: bams, as: bam }
+    zip:
+      - { input_id: stats, as: stat }
+    inputs:
+      - { kind: folder, id: bams, path: "bams" }
+      - { kind: folder, id: stats, path: "stats" }
+    outputs:
+      - { kind: folder, id: reports, path: "reports" }
+    runtime: { kind: command, command: "qc_report $bam $stat > $reports/report.txt" }
+    executor: { kind: shell }
+```
+
+A slot missing on one side was dropped there, so that item does not run.
+
+### `drop_exit_codes`: drop an item on purpose
+
+A clone that exits with one of these codes drops its item instead of failing,
+whatever `on_item_failure` says. It is never retried. Use it for a filter step:
+
+```yaml
+  - id: filter
+    kind: horus_map
+    drop_exit_codes: [10]
+    runtime: { kind: command, command: "check $sample || exit 10; ..." }
+```
+
+- The clone ends `skipped` with reason `dropped` and the error
+  `Dropped: exit code N`.
+- Clones downstream of a dropped item never run. They end `skipped` with
+  reason `upstream_dropped`.
+- The map removes dropped slots from its output folder and completes, and the
+  run still ends `COMPLETED`. Dropped items run again on the next run.
+- If every item was dropped, the map fails with `All N items were dropped in
+  <map>.` and its consumers do not run.
+
+Only command bodies match: a Python body that calls `sys.exit(10)` fails the
+item. Exit codes also depend on the backend. Slurm reports 1 for a timeout,
+out of memory, node failure or cancel, and Docker uses 125 to 127 for its own
+errors. Pick a code your command does not return for other reasons, such as
+10.
+
+Runtimes before 0.9.0 ignore these fields: they run the map after its source
+has finished, leave a zip's `$<as>` unrendered, and treat a drop code as a
+plain failure.
+
 ## When an item fails
 
 By default a failed clone fails the map. Under the default `fail_fast`
@@ -214,8 +328,8 @@ With `drop`:
 - The map ends `completed` and emits one event listing what it dropped, one
   line per item: the slot, the item's entry name, and the clone's error (at
   most 20 items, then `+N more`; each error cut to 500 characters).
-- If **every** clone failed, the map fails as usual, so a downstream task never
-  receives an empty folder.
+- If **every** item was dropped, the map fails as usual, so a downstream task
+  never receives an empty folder.
 - A cancel is never dropped: cancelling the run cancels the map.
 
 A dropped clone does not fail the run: a run whose only failures are dropped
@@ -305,6 +419,11 @@ Clones run concurrently with each other. Two knobs bound them: the map's own
 `max_concurrency` caps that map's fan, and the workflow's
 [`capacity`](/sdk/core/workflow#capacity) gates every placement globally,
 clones included, so a large fan-out never oversubscribes a machine.
+
+The workflow's `max_concurrency` does not count maps or their clones. A map
+starts without waiting for a slot and caps only its own clones, so six maps
+can run 48 clones at once. On a laptop or a shared host, set `capacity` to
+bound the total.
 
 Every clone runs on its own copy of the map's target, which is what lets them
 run at the same time on a single declared target.
