@@ -1,0 +1,177 @@
+---
+title: Agents
+description: Run tasks on machines that Temple Compute OS cannot connect to, such as a lab server or an HPC login node behind a VPN, by installing an agent on the machine.
+---
+
+Some machines accept no incoming connections: a lab workstation behind a VPN,
+or an HPC login node behind a campus firewall. Temple Compute OS cannot reach
+them over SSH. For these machines, install the **Horus agent**.
+
+The agent connects **out** to Temple Compute OS over HTTPS and asks for work.
+It runs each step on its machine and sends the results back. Nothing on the
+machine listens for connections, so you do not need to open a port or give
+anyone VPN access.
+
+A task that targets an agent works like a task on an SSH machine. Executors
+(shell, containers, Python environments), the resource monitor and file
+transfers all work the same way. A Slurm cluster works too, with the agent on
+its login node.
+
+<Callout title="Licensed feature">
+  Agents are available to organizations with an agent licence. Temple Compute
+  provides the agent program and its install command to licensed
+  organizations. It is not published on PyPI. To get access, contact Temple
+  Compute.
+</Callout>
+
+## Requirements
+
+- Linux or macOS.
+- [uv](https://docs.astral.sh/uv/) and `git`. `uv` downloads Python 3.13 if the
+  machine does not have it.
+- Outbound HTTPS to the Temple Compute OS API and to its object storage. Files
+  over 4 MiB move through object storage.
+- An organization admin, to create the registration token.
+
+## Set up an agent
+
+### 1. Create a registration token
+
+1. Open your organization's page and select the **Agents** tab.
+2. Click **Add agent**.
+3. Optional: enter a **Name** for the agent. Workflows use this name to pick
+   the machine. Without a name, the agent uses the machine's hostname.
+
+The dialog shows the commands to run on the machine, with a one-time token.
+The token works once and expires after 24 hours.
+
+### 2. Install the agent
+
+On the machine, as the user that will run tasks, run the install command that
+Temple Compute gave you. It has this form:
+
+```sh
+uv tool install <agent package from Temple Compute>
+```
+
+Run the agent as a dedicated Unix user. Task commands run as this user, and
+they can read the agent's configuration file, which holds its credential.
+
+### 3. Register
+
+```sh
+horus-agent register --url https://api.os.templecompute.com/api/v1 --token <token>
+```
+
+| Option | Default | Meaning |
+|---|---|---|
+| `--name NAME` | the token's name, else the hostname | The agent's name, if the token has none |
+| `--work-dir PATH` | `~/horus-agent` | Where tasks run on this machine |
+
+The agent stores its credential in `~/.config/horus-agent/agent.json`, readable
+only by its user. To use another location, set `HORUS_AGENT_CONFIG`.
+
+Each run gets its own folder under the work directory:
+`<work dir>/<workflow>/<run id>/`. Concurrent runs do not collide.
+
+### 4. Start it
+
+```sh
+horus-agent run
+```
+
+The agent appears as **Online** in the **Agents** tab. To keep it running after
+you log out, use a systemd user service:
+
+```ini title="~/.config/systemd/user/horus-agent.service"
+[Unit]
+Description=Horus agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=%h/.local/bin/horus-agent run
+Restart=always
+RestartSec=10
+# Jobs outlive the agent; stop only the agent.
+KillMode=process
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target
+```
+
+```sh
+systemctl --user enable --now horus-agent
+loginctl enable-linger "$USER"
+```
+
+Without systemd, for example on a login node, run it in `tmux` or with
+`nohup horus-agent run &`.
+
+Jobs run detached from the agent. When you stop, restart or upgrade the agent,
+running jobs keep going, and the run picks them up again once the agent is
+back.
+
+## Use an agent in a workflow
+
+In the task's settings, set the target to **Agent** and pick the agent from the
+list. Tasks run in the agent's work directory, so you do not set a working
+directory.
+
+In YAML:
+
+```yaml
+target:
+  kind: agent
+  agent: lab-server
+```
+
+A Slurm cluster, with the agent on the login node:
+
+```yaml
+target:
+  kind: slurm
+  partition: compute
+  inner:
+    kind: agent
+    agent: hpc-login
+```
+
+| Field | Default | Meaning |
+|---|---|---|
+| `agent` | required | The agent's name |
+| `working_directory` | the agent's work directory | Usually unset. A relative path goes under the work directory; an absolute path replaces it |
+| `offline_timeout` | `900` | Seconds without contact before the agent's tasks fail as lost |
+
+One workflow can use several agents, and mix them with cloud machines and SSH
+targets. Files between machines move through Temple Compute OS, so the
+machines never need to reach each other.
+
+## Logs
+
+The agent logs each step it runs: the command, or the file it reads or writes,
+and the run it belongs to. For full detail, including every connection and
+request, run:
+
+```sh
+horus-agent run --debug
+```
+
+or set `HORUS_AGENT_DEBUG=1`. The logs never contain task secrets, tokens or
+the signatures of presigned URLs, so you can share them with support.
+
+The agent uses `HTTPS_PROXY`, `NO_PROXY` and `SSL_CERT_FILE` when they are set.
+
+## Manage agents
+
+In the **Agents** tab, admins can rename, disable or remove an agent.
+
+- **Rename:** workflows that use the agent need the new name.
+- **Disable:** runs that target the agent are refused until you enable it
+  again.
+- **Remove:** the agent's credential stops working. To use the machine again,
+  register it with a new token.
+
+To upgrade the agent, run the install command for the new version with
+`--force`, then restart the agent.
