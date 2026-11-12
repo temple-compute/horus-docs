@@ -145,7 +145,7 @@ class BaseTarget(AutoRegistry, entry_point="target"):
     async def recover(self, task) -> bool: return False    # reattach after restart
 
     # --- agentless channel: run_command is a template method ---
-    async def run_command(self, cmd, *, cwd=None, env=None, detach=None) -> ChannelProcess: ...
+    async def run_command(self, cmd, *, cwd=None, env=None, detach=None, task=None) -> ChannelProcess: ...
 
     # implement these instead of overriding run_command (detach support)
     async def _run_command_sync(self, cmd, *, cwd, env) -> ChannelProcess: ...
@@ -167,20 +167,32 @@ class BaseTarget(AutoRegistry, entry_point="target"):
     # --- filesystem primitives (POSIX-shell defaults; override natively) ---
     async def path_exists(self, path) -> bool: ...          # test -e <path>
     async def remove(self, path) -> None: ...               # rm -rf <path>
+    async def digest(self, path, mode="deep") -> str | None: ...  # sha256 script
+    async def pack_folder(self, src, pkg) -> None: ...      # tar czf <pkg> -C <src> .
+    async def unpack_folder(self, pkg, dest) -> None: ...   # tar xzf into <dest>
+    async def move(self, src, dst) -> None: ...             # mkdir -p && mv -f
+    async def file_size(self, path) -> int: ...             # wc -c < <path>
 ```
 
 ### Filesystem primitives
 
-Alongside the channel, `BaseTarget` exposes two small filesystem primitives that
-answer *does this path exist* and *remove this path* **on the target host**:
+Alongside the channel, `BaseTarget` exposes small filesystem primitives that
+act on paths **on the target host**:
 
 ```python
 async def path_exists(self, path: str) -> bool
 async def remove(self, path: str) -> None
+async def digest(self, path: str, mode: CacheMode = "deep") -> str | None
+async def pack_folder(self, src: str, pkg: str) -> None
+async def unpack_folder(self, pkg: str, dest: str) -> None
+async def move(self, src: str, dst: str) -> None
+async def file_size(self, path: str) -> int
 ```
 
-The base class provides POSIX-shell defaults (`test -e` and `rm -rf` run over
-the channel), so remote targets work out of the box; `LocalTarget` overrides
+The base class provides POSIX-shell defaults (`test -e`, `rm -rf`, the digest
+script, `tar`, `mv` and `wc -c` run over the channel), so remote targets work
+out of the box. A failed `pack_folder`, `unpack_folder`, `move` or `file_size`
+raises `RuntimeError` with the tail of the command's stderr; `LocalTarget` overrides
 them with native `pathlib` calls, and any target that can answer more directly
 (SFTP, an agent API) should override them too.
 
@@ -215,7 +227,10 @@ required.
   channel. `run_command` is a template method; a target implements the detach
   primitives (`_launch` / `_poll` / `_read_output` / `_send_signal` /
   `_run_command_sync`) instead of overriding it. See
-  [Detachable Execution](/sdk/core/detaching). `list_dir` enumerates a target-side
+  [Detachable Execution](/sdk/core/detaching). Executors pass `task=` when the
+  command is that task's main command (the shell executor does), so a target can
+  launch it from the task's definition instead of the rendered string; it is
+  also on `TargetCommandMiddlewareContext.task`. `list_dir` enumerates a target-side
   directory, used to collect side artifacts back to the orchestrator (see
   [Side Artifacts](/sdk/core/side-artifact))
 - `access_cost()`: estimate the cost of reading an artifact from this target
