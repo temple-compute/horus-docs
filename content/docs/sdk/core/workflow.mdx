@@ -208,6 +208,15 @@ construction rather than silently degrading a data edge into an ordering-only
 one. The `source` must resolve to a real task — a root artifact
 (`artifact-<rootId>`) is not a task and so has nothing to order against.
 
+### Python edge conditions
+
+An edge `condition` of `kind: python` names a function in `ref` as
+`module:qualname`. The runtime imports and calls that function in its own
+process. A host that does not run workflow code in the runtime process sets
+`HORUS_RUNTIME_ALLOW_PYTHON_CONDITIONS=false`. An edge with a Python condition
+then fails with `ConditionEvaluationError`. Declarative conditions are not
+affected.
+
 ### Kind metadata
 
 Workflows may declare `kind_name` and `kind_description` ClassVars to make

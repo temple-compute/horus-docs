@@ -29,7 +29,9 @@ installed on the remote side. See
 
 In-process executors (`PythonExecExecutor`, `PythonFunctionExecutor`) run Python
 inside the orchestrator instead of through a channel, so they are only valid on
-local, in-process targets.
+local, in-process targets. They set the class attribute `in_process = True`
+(`False` on `BaseExecutor`), so a host can refuse them by kind without building
+a task.
 
 ### Contract
 
@@ -104,6 +106,13 @@ aliased to `_(...)`) so descriptions are translatable without depending on
   calling the wrapped Python function directly (local targets only)
 - `PythonExecExecutor`: executes a `PythonCodeStringRuntime` in-process using
   `exec()` (local targets only)
+- `ExternalPythonFunctionExecutor` (`python_function_external`): runs a
+  `PythonFunctionRuntime` in a subprocess on the task's target. Its `python`
+  field names one interpreter executable. The function's outcome comes back
+  as JSON: return an artifact, a list of artifacts, `None`, or plain JSON
+  data. Any other return value fails the task with a clear message. A
+  function that raises fails the task with `TaskExecutionError`, which carries
+  the target-side traceback.
 
 ## Example
 
