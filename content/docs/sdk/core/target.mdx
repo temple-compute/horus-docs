@@ -167,10 +167,10 @@ class BaseTarget(AutoRegistry, entry_point="target"):
     # --- filesystem primitives (POSIX-shell defaults; override natively) ---
     async def path_exists(self, path) -> bool: ...          # test -e <path>
     async def remove(self, path) -> None: ...               # rm -rf <path>
-    async def digest(self, path, mode="deep") -> str | None: ...  # sha256 script
+    async def path_digest(self, path, mode="deep") -> str | None: ...  # sha256 script
     async def pack_folder(self, src, pkg) -> None: ...      # tar czf <pkg> -C <src> .
     async def unpack_folder(self, pkg, dest) -> None: ...   # tar xzf into <dest>
-    async def move(self, src, dst) -> None: ...             # mkdir -p && mv -f
+    async def move_file(self, src, dst) -> None: ...        # mkdir -p && mv -f
     async def file_size(self, path) -> int: ...             # wc -c < <path>
 ```
 
@@ -182,19 +182,39 @@ act on paths **on the target host**:
 ```python
 async def path_exists(self, path: str) -> bool
 async def remove(self, path: str) -> None
-async def digest(self, path: str, mode: CacheMode = "deep") -> str | None
+async def path_digest(self, path: str, mode: CacheMode = "deep") -> str | None
 async def pack_folder(self, src: str, pkg: str) -> None
 async def unpack_folder(self, pkg: str, dest: str) -> None
-async def move(self, src: str, dst: str) -> None
+async def move_file(self, src: str, dst: str) -> None
 async def file_size(self, path: str) -> int
 ```
 
 The base class provides POSIX-shell defaults (`test -e`, `rm -rf`, the digest
 script, `tar`, `mv` and `wc -c` run over the channel), so remote targets work
-out of the box. A failed `pack_folder`, `unpack_folder`, `move` or `file_size`
-raises `RuntimeError` with the tail of the command's stderr; `LocalTarget` overrides
-them with native `pathlib` calls, and any target that can answer more directly
-(SFTP, an agent API) should override them too.
+out of the box. A failed `pack_folder`, `unpack_folder`, `move_file` or
+`file_size` raises `RuntimeError` with the tail of the command's stderr.
+`LocalTarget` overrides `path_exists` and `remove` with `pathlib`; the other
+primitives use the shell defaults. Any target that can answer more directly
+(SFTP, an agent API) should override them. A native `unpack_folder` must refuse
+absolute members, `..`, links pointing outside the destination and device
+files.
+
+A target that refuses an operation by its own policy raises
+`OperationRefusedError` (`horus_runtime.core.target.exceptions`), a
+`TaskExecutionError`. Side-artifact collection keeps such files on the target
+and goes on; elsewhere it fails the task.
+
+<Callout type="warn">
+
+Targets are pydantic models: a field named like one of these methods (e.g.
+`path_digest`) shadows it and breaks the store. Pick another field name.
+
+</Callout>
+
+Each target operation can be attributed to the task it serves:
+`horus_runtime.context.current_op_task_id()` returns that task's id during the
+task's run, its pre-run completion check, input digests, input staging and
+output evacuation, and `None` for run-level operations.
 
 Together with `run_command_sync`, `put_file`, `get_file`, `path_on_target`, and
 `resolved_working_directory`, these primitives are exactly what the
