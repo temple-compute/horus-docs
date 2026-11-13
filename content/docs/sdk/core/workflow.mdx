@@ -212,9 +212,12 @@ one. The `source` must resolve to a real task — a root artifact
 
 An edge `condition` of `kind: python` names a function in `ref` as
 `module:qualname`. The runtime imports and calls that function in its own
-process. A host that does not run workflow code in the runtime process sets
-`HORUS_RUNTIME_ALLOW_PYTHON_CONDITIONS=false`. An edge with a Python condition
-then fails with `ConditionEvaluationError`. Declarative conditions are not
+process, and so does a `branch_router` decider. A host that does not run
+workflow code in the runtime process sets
+`HORUS_RUNTIME_ALLOW_PYTHON_CONDITIONS=false` or
+`HORUS_RUNTIME_ALLOW_IN_PROCESS=false`. With either one set, an edge with a
+Python condition fails with `ConditionEvaluationError`, and a `branch_router`
+fails with `BranchConfigurationError`. Declarative conditions are not
 affected.
 
 ### Kind metadata
