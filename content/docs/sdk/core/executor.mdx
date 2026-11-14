@@ -29,7 +29,16 @@ installed on the remote side. See
 
 In-process executors (`PythonExecExecutor`, `PythonFunctionExecutor`) run Python
 inside the orchestrator instead of through a channel, so they are only valid on
-local, in-process targets.
+local, in-process targets. They set the class attribute `in_process = True`
+(`False` on `BaseExecutor`).
+
+A host that keeps workflow code out of the runtime process sets
+`HORUS_RUNTIME_ALLOW_IN_PROCESS=false`. Then `execute()` refuses every executor
+with `in_process = True`, and `python` edge conditions and `branch_router`
+deciders are refused too (see
+[Python edge conditions](/sdk/core/workflow#python-edge-conditions)). The check
+runs when each task or condition runs, so it covers map clones, loop
+iterations and subworkflows without a pre-run walk.
 
 ### Contract
 
@@ -104,6 +113,35 @@ aliased to `_(...)`) so descriptions are translatable without depending on
   calling the wrapped Python function directly (local targets only)
 - `PythonExecExecutor`: executes a `PythonCodeStringRuntime` in-process using
   `exec()` (local targets only)
+- `ExternalPythonFunctionExecutor` (`python_function_external`): runs a
+  `PythonFunctionRuntime` in a subprocess on the task's target. See
+  [External Python functions](#external-python-functions).
+
+### External Python functions
+
+The function's outcome comes back as JSON. It may return:
+
+- `None`, or plain JSON data (logged and ignored, as with the in-process
+  executor);
+- a `FileArtifact` or `FolderArtifact`, or a list of them, when the task
+  declares an output of that kind and the file or folder is inside the task
+  working directory. It comes back over the channel as a side artifact.
+  Artifacts with any other kind or location fail the task.
+
+Anything else, such as a `set`, a `Path` or a DataFrame, fails the task with
+a message that names the type. Write such values to a file in the working
+directory, or to `HORUS_SIDE_ARTIFACTS_DIR`, instead.
+
+**Breaking changes** compared with earlier releases:
+
+- A function that raises fails the task with `TaskExecutionError`, which
+  carries the target-side traceback. The original exception type is not
+  re-raised, so `except MyError` around a run no longer matches.
+- A return value that is not JSON-serialisable fails the task instead of
+  being ignored.
+- The `python` field names one interpreter executable, such as
+  `.horus_python_environment/bin/python`. Multi-word commands like
+  `conda run -n env python` are no longer accepted.
 
 ## Example
 
