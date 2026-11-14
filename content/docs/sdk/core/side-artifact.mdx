@@ -55,6 +55,10 @@ Side artifacts are meant to be small and inspectable. Files larger than
 data should be declared as task `inputs`/`outputs` instead**, those have their
 own [transfer strategies](/sdk/core/transfer) and are not pulled back wholesale.
 
+A target may refuse to hand a file over (`OperationRefusedError`, e.g. a machine
+whose policy keeps data on it). That file is logged as kept on the target and
+the others are still collected; the task does not fail.
+
 <Callout type="info">
 
 A custom target only needs to implement the channel's `list_dir` (alongside

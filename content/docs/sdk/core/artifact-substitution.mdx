@@ -183,6 +183,17 @@ value artifacts — the dotted form forwards straight to the artifact, so
 
 </Callout>
 
+## Bindings
+
+`horus_builtin.runtime.substitution.bindings(template, task)` returns what
+`substitute` renders for each `$id` / `${id}` placeholder of a template, before
+quoting: `{"path": str}` for an artifact's path on the task's target, or
+`{"value": str}` for a value artifact (`{"value": list[str]}` for a list).
+`${task.*}`, `${id.attr}` and unknown names are left out. Quoting each value
+(list items one by one, joined by spaces) and filling it in gives
+`substitute(template, task, quote=True)`, so a target can render a task's
+command itself from its template.
+
 ## Choosing ids
 
 - Prefer `snake_case`, identifier-safe ids (`pdb_in`, `result`) — they work in
