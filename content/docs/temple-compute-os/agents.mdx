@@ -12,8 +12,9 @@ it locally and sends the results back. Nothing on the machine listens for
 connections.
 
 A task that targets an agent works like a task on an SSH machine. Shell and
-container executors, Python environments, file transfers, the CPU and RAM
-charts and Slurm (with the agent on the login node) all work.
+container executors, Python environments, file transfers and Slurm (with the
+agent on the login node) all work. CPU and RAM charts need an agent in open
+mode; see [Resource charts and profiling](#resource-charts-and-profiling).
 
 <Callout title="Licensed feature">
   Agents are available to organizations with an agent licence. To get access,
@@ -149,7 +150,6 @@ allowed_hosts = ["api.os.templecompute.com", "<bucket host>"]
 uploads = false
 logs = "off"
 downloads = true
-resource_usage = true
 
 [jobs]
 run_as = "horus-job"
@@ -167,7 +167,7 @@ read_roots = ["/data/sequencing"]
 | `uploads` | `false` | Whether task outputs leave the machine |
 | `logs` | `off` | `full` sends task logs to Temple Compute OS |
 | `downloads` | `true` | Whether the agent may download files |
-| `resource_usage` | `true` | CPU and RAM samples for the run's charts |
+| `resource_usage` | | Accepted and ignored from horus-agent 0.2.5 |
 | `allow_code_suffixes` | none | File suffixes such as `.js` that may be staged into a run |
 | `[jobs] run_as` | none | The user tasks run as |
 | `[jobs] home` | the task user's home | `HOME` for tasks |
@@ -183,6 +183,18 @@ operation the agent allowed or refused.
 With `uploads = false` and `logs = "off"`, the defaults, outputs and logs stay
 on the machine. Only status, file names, sizes and digests reach Temple Compute
 OS. Task logs and output contents are not available in the app for these runs.
+
+### Resource charts and profiling
+
+A strict agent runs only approved commands, unmodified. Middleware that rewrites
+commands, such as the resource monitor's wrapper, does not work on strict
+agents, so their runs show no CPU and RAM charts. Charts on other targets (SSH,
+Slurm, local) are unchanged.
+
+To profile on a machine, set `mode = "open"` in `/etc/horus-agent/policy.toml`
+and restart the agent. The monitor's wrapper works in open mode, and its
+resource files are readable even with `uploads = false`. Open mode accepts any
+workflow the platform sends, so the administrator decides per machine.
 
 ### Check the machine
 
