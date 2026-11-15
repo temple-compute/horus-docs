@@ -1,0 +1,340 @@
+---
+title: Agents
+description: Install the Horus agent on a machine that accepts no incoming connections, set its policy, approve workflow releases and write workflows that run on it.
+---
+
+Some machines accept no incoming connections: a lab server behind a VPN, or an
+HPC login node behind a campus firewall. Temple Compute OS cannot reach them
+over SSH, so you install the **Horus agent** on them.
+
+The agent connects **out** to Temple Compute OS over HTTPS, asks for work, runs
+it locally and sends the results back. Nothing on the machine listens for
+connections.
+
+A task that targets an agent works like a task on an SSH machine. Shell and
+container executors, Python environments, file transfers, the CPU and RAM
+charts and Slurm (with the agent on the login node) all work.
+
+<Callout title="Licensed feature">
+  Agents are available to organizations with an agent licence. To get access,
+  contact Temple Compute.
+</Callout>
+
+## Requirements
+
+- Linux or macOS, with Python 3.13 or newer. [uv](https://docs.astral.sh/uv/)
+  downloads it when it is missing.
+- Outbound HTTPS to the Temple Compute OS API and to its object storage. Files
+  over 4 MiB move through object storage.
+- An organization admin, to create the registration token.
+- Python 3.11 or newer on the machine that runs the tasks.
+
+## Install and register
+
+### 1. Create a registration token
+
+1. Open your organization's page and select the **Agents** tab.
+2. Click **Add agent**.
+3. Optional: enter a **Name**. Workflows use it to pick the machine. Without a
+   name, the agent uses the machine's hostname.
+
+The dialog shows the commands for the machine, with a one-time token. The token
+works once and expires after 24 hours.
+
+### 2. Install and register the agent
+
+```sh
+uv tool install horus-agent          # or: pip install horus-agent
+HORUS_AGENT_TOKEN=<token> horus-agent register --url https://api.os.templecompute.com/api/v1
+```
+
+`register` also reads the token from standard input, so it never appears in the
+process list or the shell history. The URL must use `https://`; plain `http://`
+is accepted only for `localhost`.
+
+| Option | Default | Meaning |
+|---|---|---|
+| `--name NAME` | the token's name, else the hostname | The agent's name, when the token has none |
+| `--work-dir PATH` | `~/horus-agent` | Where tasks run on this machine |
+| `--ca-bundle PEM` | system CAs | Trust only these CAs for the broker |
+| `--job-env NAME` | none | Pass this environment variable on to tasks (repeatable) |
+
+The credential is stored in `~/.config/horus-agent/agent.json`, readable only by
+its user. Set `HORUS_AGENT_CONFIG` to use another location. To change a setting
+later, edit the file and restart the agent.
+
+### 3. Set the policy
+
+A new agent refuses every task until the machine has a policy. As root:
+
+```sh
+sudo horus-agent policy init --run-as horus-job
+```
+
+This writes `/etc/horus-agent/policy.toml`. See [Policy](#policy) for the other
+choices, then continue with [approving a release](#approve-a-release).
+
+### 4. Start it
+
+```sh
+horus-agent run
+```
+
+The agent appears as **Online** in the **Agents** tab. For a production machine,
+run it as a system service under its own user. Each horus-agent release on
+GitHub includes a hardened systemd unit and a hash-pinned `requirements.txt`.
+To keep a per-user agent running after logout:
+
+```sh
+systemctl --user enable --now horus-agent
+loginctl enable-linger "$USER"
+```
+
+Without systemd, run it in `tmux` or with `nohup horus-agent run &`.
+
+Jobs run detached from the agent. Stopping, restarting or upgrading the agent
+does not stop them, and the run picks them up when the agent is back.
+
+## Policy
+
+The machine's administrator decides what the agent may do, in the root-owned
+file `/etc/horus-agent/policy.toml`. Temple Compute OS cannot change it.
+`horus-agent policy check` prints the policy in effect.
+
+The agent reads the policy when it starts. Restart it after every change.
+
+### Strict and open
+
+| Mode | Behavior |
+|---|---|
+| `strict` (default) | Runs only workflow releases approved on this machine, and tasks run as their own user |
+| `open` | Runs any workflow. For internal machines |
+
+With no policy file the agent is strict and refuses everything.
+
+```sh
+sudo horus-agent policy init --run-as horus-job   # strict
+sudo horus-agent policy init --open               # open
+```
+
+In strict mode, tasks run as a separate user so they cannot read the agent's
+credential. Name that user with `[jobs] run_as` and pick how the agent switches
+to it with `run_as_via`, either `sudo` (default) or `setpriv`. Setting
+`allow_same_user = true` runs tasks as the agent's own user instead.
+
+Create the users and the work directory like this:
+
+```sh
+useradd --system --home-dir /var/lib/horus-agent --shell /usr/sbin/nologin horus-agent
+useradd --system --home-dir /srv/horus-agent --no-create-home --shell /usr/sbin/nologin horus-job
+usermod -aG horus-job horus-agent
+install -d -o horus-agent -g horus-agent -m 700 /var/lib/horus-agent
+install -d -o horus-agent -g horus-job -m 3770 /srv/horus-agent
+```
+
+For `sudo`, add `horus-agent ALL=(horus-job) NOPASSWD: ALL` to
+`/etc/sudoers.d/horus-agent`. Do not add either user to the `docker` group; use
+rootless Podman or Apptainer for container tasks.
+
+The agent refuses to start unless the policy file and every directory above it
+are owned by root and not writable by group or others.
+
+### Settings
+
+```toml title="/etc/horus-agent/policy.toml"
+schema = 1
+mode = "strict"
+work_dir = "/srv/horus-agent"
+allowed_hosts = ["api.os.templecompute.com", "<bucket host>"]
+uploads = false
+logs = "off"
+downloads = true
+resource_usage = true
+
+[jobs]
+run_as = "horus-job"
+run_as_via = "sudo"
+
+[data]
+read_roots = ["/data/sequencing"]
+```
+
+| Key | Default | Meaning |
+|---|---|---|
+| `mode` | `strict` | `strict` or `open` |
+| `work_dir` | the registered work dir | The agent's `--work-dir` must be this folder or inside it |
+| `allowed_hosts` | the API host | Hosts the agent downloads from and uploads to, over HTTPS only |
+| `uploads` | `false` | Whether task outputs leave the machine |
+| `logs` | `off` | `full` sends task logs to Temple Compute OS |
+| `downloads` | `true` | Whether the agent may download files |
+| `resource_usage` | `true` | CPU and RAM samples for the run's charts |
+| `allow_code_suffixes` | none | File suffixes such as `.js` that may be staged into a run |
+| `[jobs] run_as` | none | The user tasks run as |
+| `[jobs] home` | the task user's home | `HOME` for tasks |
+| `[data] read_roots` | none | Extra folders a path parameter may name |
+
+The policy also holds size and concurrency limits (`max_put_bytes`,
+`max_fetch_bytes`, `max_unpack_bytes`, `max_unpack_files`,
+`max_concurrent_runs`) and the path of the audit log, which records every
+operation the agent allowed or refused.
+
+### Metadata only
+
+With `uploads = false` and `logs = "off"`, the defaults, outputs and logs stay
+on the machine. Only status, file names, sizes and digests reach Temple Compute
+OS. Task logs and output contents are not available in the app for these runs.
+
+### Check the machine
+
+```sh
+horus-agent doctor
+```
+
+prints one line per check: work directory, policy file, `run_as` user, sudo
+rule, job Python and state directory. It exits with an error when a check
+fails.
+
+## Approve a release
+
+A strict agent runs only releases an administrator approved on that machine. A
+release is a published version of a workflow in a project.
+
+```sh
+sudo horus-agent approve <release id>
+sudo horus-agent approve ./release.zip
+sudo horus-agent approve <release id> --expect-hash <hash> --yes
+horus-agent approvals
+sudo horus-agent revoke <hash>
+```
+
+`approve` shows what the release can run on the machine: each task's command,
+script hashes, Slurm options, inputs and secret names. It asks for `yes`
+before it stores the approval. Use `--expect-hash` to refuse any other content
+and `--yes` to skip the question.
+
+- Approvals are per machine and keyed by the content hash. A new release
+  version with identical content stays approved. Any change to a command,
+  script, constant file, Slurm option or secret name needs a new approval.
+- An approval reaches Temple Compute OS on the agent's next contact, up to
+  about 20 seconds later. A campaign started right after approving pauses as
+  **Not approved**. Resume it.
+- `revoke` stops new jobs of the release within 10 seconds and ends running
+  jobs of its runs within about 20 seconds.
+- Placeholders are checked when you approve. A placeholder is accepted as an
+  argument to an ordinary tool. It is refused where it would be run as code,
+  for example as the program, in `sh -c`, `eval` or `python -c`, or in a
+  variable assignment. Run `horus-agent approve --dry-run <folder>` on a folder
+  of workflows to see which templates are refused and why, without approving
+  anything.
+
+## Write workflows for strict agents
+
+- The agent builds each task's command from the approved template. Run
+  parameters and values from earlier tasks are inserted as single quoted words
+  made of letters, digits and `._,:=+@/-`.
+- Scripts and constant files that the workflow ships are placed at the root of
+  the run folder, flat, and are read-only. The task runs in
+  `<run>/<task>/<execution id>`.
+- Write outputs to `${out}`. Paths relative to the working directory are not
+  collected.
+- A script that finds its neighbours through its own path
+  (`$(dirname "$0")`) should use paths relative to the task's working directory
+  instead.
+- Files from the cloud with code-like names (`*.py`, `*.so`, `*.sh`, `*.jar`,
+  `*.js` and similar) are refused, unless the machine's policy lists the suffix
+  in `allow_code_suffixes`. Files the release itself ships are not affected.
+- Containers and Python function executors are not accepted in approved
+  releases. Use the shell executor with a command or a Python script.
+
+## Use an agent in a workflow
+
+In the task's settings, set the target to **Agent** and pick the agent from the
+list. In YAML:
+
+```yaml
+target:
+  kind: agent
+  agent: lab-server
+```
+
+A Slurm cluster, with the agent on the login node:
+
+```yaml
+target:
+  kind: slurm
+  partition: compute
+  inner:
+    kind: agent
+    agent: hpc-login
+```
+
+| Field | Default | Meaning |
+|---|---|---|
+| `agent` | required | The agent's name |
+| `working_directory` | the agent's work directory | Usually unset |
+| `offline_timeout` | `900` | Seconds without contact before the agent's tasks fail as lost |
+
+One workflow can use several agents and mix them with cloud machines and SSH
+targets. Files move between machines through Temple Compute OS.
+
+## Refusal messages
+
+A refused operation fails the task with a message from the agent or from
+Temple Compute OS.
+
+| Message | What it means and what to do |
+|---|---|
+| `Not approved on <agent>` | The release is not approved on that machine. Run `sudo horus-agent approve <release id>`. Right after approving, wait about 20 seconds and resume the campaign |
+| `Agent '<agent>' runs approved releases only` | The run has no release: it came from the editor, or the workflow changed after publishing. Publish a release and run it from a campaign |
+| `This workflow release is not approved on this agent` | Same as above, reported by the machine |
+| `No policy file` | The machine has no policy. Run `sudo horus-agent policy init` |
+| `Strict mode runs tasks as their own user` | Set `[jobs] run_as`, or `allow_same_user = true`, or use `mode = "open"` |
+| `must not be a symlink`, `must be owned by root` | The policy file or a folder above it can be changed by other users. Fix the owner and mode |
+| `'<name>' is not an input, output, script or task of the approved release` | A task wrote a file the release does not declare. Write outputs to `${out}` |
+| `is code that interpreters load on their own` | A staged file has a code-like name. Rename it, or add the suffix to `allow_code_suffixes` |
+| `Uploads are off on this agent`, `Downloads are off on this agent` | The policy turns `uploads` or `downloads` off |
+| `Path is outside the work dir` | A path leaves the work directory. Check `work_dir` in the policy |
+| `The work dir needs group <group> and mode 3770` | Run the `chgrp` and `chmod` command that `horus-agent run` prints |
+| `Refusing to run as root` | Run the agent as its own user |
+| `The job's Python is older than 3.11` | Use Python 3.11 or newer for the tasks |
+| `Environment '<name>' is not approved` | The task uses a variable or secret the release does not declare |
+
+## Upgrade from 0.1
+
+- An agent without a policy file now refuses everything. Run
+  `sudo horus-agent policy init --open` to keep the old behavior, or create a
+  strict policy and approve your releases.
+- The agent no longer runs as root. Give it its own user, or pass
+  `--allow-root` to `run` for now.
+- The broker URL must use `https://`.
+- Tasks get a minimal environment. The first `run` logs the variables they lose.
+  Add the ones they need, for example `MODULEPATH` or `CONDA_EXE`, with
+  `--job-env` or `job_env` in `agent.json`.
+- `agent.json` must be mode 0600.
+- Approval hashes change when a template changes, so approve the releases again.
+
+To upgrade, run `uv tool install --force horus-agent`, then restart the agent.
+
+## Manage agents
+
+In the **Agents** tab, admins can rename, disable or remove an agent.
+
+- **Rename:** workflows that use the agent need the new name.
+- **Disable:** runs that target the agent are refused until you enable it.
+- **Remove:** the agent's credential stops working. Register the machine again
+  with a new token to use it.
+
+The tab also shows each agent's mode, how many releases it approved, and
+whether uploads and logs are off. Under **Support access**, an admin can give
+Temple Compute staff time-limited access to the organization's agents.
+
+## Troubleshooting
+
+- **The agent stays offline.** Check outbound HTTPS to the API. The agent uses
+  `HTTPS_PROXY`, `NO_PROXY` and `SSL_CERT_FILE`. Run `horus-agent run --debug`
+  for a full log. It leaves out secrets and tokens, but commands and paths
+  appear as given, so read it before sharing.
+- **`horus-agent run` exits at start.** Run `horus-agent doctor` and
+  `horus-agent policy check`.
+- **A task fails right away.** Read its refusal message in the table above.
+- **A change to the policy does nothing.** Restart the agent.
