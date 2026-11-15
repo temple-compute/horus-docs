@@ -1,0 +1,31 @@
+---
+title: Organization data controls
+description: Switch features off for an organization, keep it to EU regions and delete old runs automatically.
+---
+
+Organization admins find **Data controls** on the organization's page.
+
+| Control | Effect |
+|---|---|
+| **AI chat** | Turns the chat copilot on or off for the organization's workflows |
+| **MCP clients** | Allows or blocks MCP connections to the organization's workflows |
+| **Analytics and session replay** | Turns product analytics on or off for the organization's members |
+| **EU regions only** | Cloud machines for the organization's workflows start in EU regions only |
+| **Strict agents only** | Runs use only [agents](/temple-compute-os/agents) in strict mode, which run approved releases only. Other agents are marked **Not strict: refused** |
+
+## Retention
+
+**Delete runs after (days)** removes finished runs older than the number of
+days you set, with their files and logs. Leave it empty to keep runs.
+
+When you shorten the period, the app shows how many runs it will delete and
+asks you to confirm. A new setting takes effect after 24 hours, so a mistake
+can be undone first. Deleted runs cannot be restored.
+
+Deleting a single run also deletes its files.
+
+## MCP connections
+
+MCP connections made through a connector last one hour, are renewed
+automatically and work only in the organization selected when you approved
+them. Reconnect existing connections once after the update.
