@@ -102,6 +102,7 @@ horus run score_batches.yaml --trigger split
 | `chain` | `true` starts each item as soon as its source map has it; see [Running items through maps](#running-items-through-maps) |
 | `zip` | more map outputs paired by item, `[{input_id, as}]` |
 | `drop_exit_codes` | exit codes (1 to 255) that drop an item instead of failing it |
+| `retry` | retries each item on its own; see [Retrying an item](#retrying-an-item) |
 
 The map must declare **exactly one output**, and it must be a `folder`. That
 folder is the fan-in point: it holds one subdirectory per item, and it is what
@@ -282,11 +283,13 @@ whatever `on_item_failure` says. It is never retried. Use it for a filter step:
 ```
 
 - The clone ends `skipped` with reason `dropped` and the error
-  `Dropped: exit code N`.
+  `Dropped: exit code N`, logged at `INFO`.
 - Clones downstream of a dropped item never run. They end `skipped` with
   reason `upstream_dropped`.
 - The map removes dropped slots from its output folder and completes, and the
-  run still ends `COMPLETED`. Dropped items run again on the next run.
+  run still ends `COMPLETED`.
+- The drop is final. The next run skips the map and the tasks after it until
+  an input, the command or `drop_exit_codes` change.
 - If every item was dropped, the map fails with `All N items were dropped in
   <map>.` and its consumers do not run.
 
@@ -344,13 +347,34 @@ Only use `drop` when a missing item is an acceptable result. A map whose
 outputs are all needed later, such as shards merged back into one file,
 should keep the default.
 
+### Retrying an item
+
+A map's `retry` applies to each clone on its own: a clone that exits with a
+code the `retry` covers runs again, and its siblings carry on. The map itself
+is never retried as a whole. Drop codes are never retried, and
+`on_item_failure: drop` applies once a clone's attempts are spent.
+
+```yaml
+  - id: score
+    kind: horus_map
+    on_item_failure: drop
+    retry: { max: 2, on_exit_codes: [137], backoff_s: 60 }
+    # ...
+```
+
 ### Retrying dropped items
 
-A map that dropped items does not record its own manifest, and removes one
-left by an earlier run. The next run therefore runs the map again. When the
-working directory persists between runs (as with the `horus` CLI), the clones
-that succeeded skip on their own manifests, and only the dropped items run.
-Once nothing is dropped, the map records its manifest and skips as usual.
+A map that dropped items through `on_item_failure: drop` does not record its
+own manifest, and removes one left by an earlier run. The next run therefore
+runs the map again. When the working directory persists between runs (as with
+the `horus` CLI), the clones that succeeded skip on their own manifests, and
+only the dropped items run. Once nothing is dropped, the map records its
+manifest and skips as usual.
+
+Items dropped by [`drop_exit_codes`](#drop_exit_codes-drop-an-item-on-purpose)
+are not retried: the map records its manifest with them. To run them again,
+change an input, the command or `drop_exit_codes`, or delete the map's
+manifest (see [Skipping and resuming](#skipping-and-resuming)).
 
 ### With the failure policy
 

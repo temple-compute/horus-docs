@@ -79,6 +79,7 @@ tasks:
     resources: { ... }   # optional compute hints
     skip_if_complete: true   # skip when outputs already exist (default true)
     cache: fast              # optional; deep or fast (default: the workflow's)
+    retry: { max: 2 }        # optional; run again on a non-zero exit
 ```
 
 ### Runtimes: what to run
@@ -214,6 +215,27 @@ unconstrained. Capacity is opt-in: with no `capacity` (or a task with no
 immediately, exactly as before. `max_concurrency` still applies on top. A single
 task that asks for more than a location's total capacity fails fast rather than
 blocking forever.
+
+### Retry (optional)
+
+`retry` runs a task again when its command exits non-zero:
+
+```yaml
+retry:
+  max: 2                # attempts after the first, 0 to 10
+  on_exit_codes: [137]  # codes that retry; empty = any non-zero exit
+  backoff_s: 30         # wait before attempt 2, doubled each time, at most 1 h
+```
+
+- Only an exit code retries. Any other error fails the task at once.
+- Between attempts the task is `pending`, not `failed`, and it runs again on
+  the same machine. Each retry logs `Exit code N; attempt A of M for <task>.`
+  and emits a `task_retry` event with `attempt`, `max_attempts`, `exit_code`
+  and `delay_s`.
+- The task fails once its attempts are spent. Each run starts with a full
+  budget.
+- On a map, `retry` applies to each item on its own; see
+  [Retrying an item](/guides/fan-out-fan-in#retrying-an-item).
 
 ## Referencing artifacts in commands
 

@@ -238,6 +238,11 @@ a `finally` uploads a log that ends with the error. `reset()` and the next
 run clear `error`. The timing middleware reports how the task ended
 ("completed in", "failed after", "was canceled after").
 
+A task with a [`retry`](/guides/writing-workflows-yaml#retry-optional) is set
+`PENDING` instead of `FAILED` when the scheduler will run it again, so no
+status update shows a failure first. A map clone that exits with one of its
+map's `drop_exit_codes` ends `SKIPPED` with `skip_reason` `dropped`.
+
 ## Built-in Tasks
 
 - `HorusTask`: the standard task implementation for command-style execution
