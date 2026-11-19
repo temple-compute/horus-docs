@@ -168,6 +168,16 @@ Reads and writes raw bytes. Suitable for any opaque file.
 from horus_builtin.artifact.file import FileArtifact
 ```
 
+### `StructureArtifact`
+
+A `FileArtifact` with kind `structure`, for a molecular structure file in any
+format Mol* reads (PDB, mmCIF, SDF, MOL2, ...). It behaves exactly like a
+file; the kind only tells tools how to show it.
+
+```python
+from horus_builtin.artifact.structure import StructureArtifact
+```
+
 ### `FolderArtifact`
 
 Represents a directory. It overrides the transport hooks so a whole directory
