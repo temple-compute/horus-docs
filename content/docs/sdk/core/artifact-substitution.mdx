@@ -22,6 +22,7 @@ the placeholder untouched.
 | ----------------------- | --------------------------------------- | ---------------------------------------- | ----- |
 | `command`               | `$id`, `${id}`, `${id.path}`, `${task.*}` | on-target path of the artifact `id`    | `string.Template`; `{}` passes through untouched |
 | `python_script`         | `$id`, `${id}` — **in `args` only**     | on-target path                           | the `.py` file is shipped as-is, not templated |
+| `r_script`              | `$id`, `${id}` — **in `args` only**     | on-target path                           | as `python_script`, for an `.R` file |
 | `python` (code string)  | `$id`, `${id}`, `${id.path}`, `${task.*}` | on-target path (a string)              | `string.Template`; **`{}` is left untouched** |
 | `python_function`       | parameter named `id`                    | the `BaseArtifact` object (use `.path`)  | injected as a kwarg, not string templating |
 

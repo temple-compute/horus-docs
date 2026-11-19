@@ -88,6 +88,7 @@ tasks:
 | `command` | `command` | a shell command |
 | `python` | `code` | a Python snippet, in-process |
 | `python_script` | `script`, `args`, `python` | a local `.py` file shipped to the target |
+| `r_script` | `script`, `args`, `python` | a local `.R` file shipped to the target, run with `Rscript` |
 
 ```yaml
 runtime:
@@ -95,11 +96,21 @@ runtime:
   command: "python train.py --data $dataset --out $model"
 ```
 
+`r_script` works like `python_script`. Its `python` field (titled
+**Interpreter**) defaults to `Rscript`:
+
+```yaml
+runtime:
+  kind: r_script
+  script: ./deseq.R
+  args: "$counts $results"
+```
+
 ### Executors: how to run
 
 | `kind` | Works with | Notes |
 |--------|-----------|-------|
-| `shell` | `command`, `python_script` | runs in a subprocess |
+| `shell` | `command`, `python_script`, `r_script` | runs in a subprocess |
 | `python` | `python` | runs in-process inside the runtime |
 
 ### Targets: where to run

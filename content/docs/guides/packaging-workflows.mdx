@@ -57,8 +57,8 @@ Alongside it travel, at paths relative to the workflow's directory:
   an output. These are the files the workflow reads but never writes, so they
   have to come with it. See
   [Artifacts: inputs and outputs](/guides/writing-workflows-yaml#artifacts-inputs-and-outputs).
-- Every `python_script` runtime's **`script`**, the local `.py` file that
-  runtime ships to its target.
+- Every `python_script` or `r_script` runtime's **`script`**, the local file
+  that runtime ships to its target.
 - Every executor's **`environment_file`**, if the executor you are using has one
   (a conda-style executor, for instance).
 
