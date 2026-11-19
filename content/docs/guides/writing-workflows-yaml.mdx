@@ -79,6 +79,7 @@ tasks:
     resources: { ... }   # optional compute hints
     skip_if_complete: true   # skip when outputs already exist (default true)
     cache: fast              # optional; deep or fast (default: the workflow's)
+    retry: { max: 2 }        # optional; run again on a non-zero exit
 ```
 
 ### Runtimes: what to run
@@ -88,6 +89,7 @@ tasks:
 | `command` | `command` | a shell command |
 | `python` | `code` | a Python snippet, in-process |
 | `python_script` | `script`, `args`, `python` | a local `.py` file shipped to the target |
+| `r_script` | `script`, `args`, `python` | a local `.R` file shipped to the target, run with `Rscript` |
 
 ```yaml
 runtime:
@@ -95,11 +97,21 @@ runtime:
   command: "python train.py --data $dataset --out $model"
 ```
 
+`r_script` works like `python_script`. Its `python` field (titled
+**Interpreter**) defaults to `Rscript`:
+
+```yaml
+runtime:
+  kind: r_script
+  script: ./deseq.R
+  args: "$counts $results"
+```
+
 ### Executors: how to run
 
 | `kind` | Works with | Notes |
 |--------|-----------|-------|
-| `shell` | `command`, `python_script` | runs in a subprocess |
+| `shell` | `command`, `python_script`, `r_script` | runs in a subprocess |
 | `python` | `python` | runs in-process inside the runtime |
 
 ### Targets: where to run
@@ -122,12 +134,18 @@ outputs:
 | `kind` | Stores |
 |--------|--------|
 | `file` | a plain file |
+| `structure` | a molecular structure file (PDB, mmCIF, SDF, MOL2, ...) |
 | `folder` | a directory |
 | `json` | JSON-serializable data |
 | `pickle` | a pickled Python object |
 
 Each artifact has an `id` (unique within the task's inputs or outputs) and a
 `path`. A task counts as complete when all of its `outputs` exist on disk.
+
+A task cannot use one `id` for both an input and an output. Two tasks cannot
+write the same output path, or one inside the other's; a map's slots, loop
+iterations, subworkflow children and a task writing back to its own input path
+are allowed. See [Output paths](/sdk/core/workflow#output-paths).
 
 An artifact may also carry `labels`, a free-form `string: string` mapping the
 runtime never reads:
@@ -197,6 +215,27 @@ unconstrained. Capacity is opt-in: with no `capacity` (or a task with no
 immediately, exactly as before. `max_concurrency` still applies on top. A single
 task that asks for more than a location's total capacity fails fast rather than
 blocking forever.
+
+### Retry (optional)
+
+`retry` runs a task again when its command exits non-zero:
+
+```yaml
+retry:
+  max: 2                # attempts after the first, 0 to 10
+  on_exit_codes: [137]  # codes that retry; empty = any non-zero exit
+  backoff_s: 30         # wait before attempt 2, doubled each time, at most 1 h
+```
+
+- Only an exit code retries. Any other error fails the task at once.
+- Between attempts the task is `pending`, not `failed`, and it runs again on
+  the same machine. Each retry logs `Exit code N; attempt A of M for <task>.`
+  and emits a `task_retry` event with `attempt`, `max_attempts`, `exit_code`
+  and `delay_s`.
+- The task fails once its attempts are spent. Each run starts with a full
+  budget.
+- On a map, `retry` applies to each item on its own; see
+  [Retrying an item](/guides/fan-out-fan-in#retrying-an-item).
 
 ## Referencing artifacts in commands
 

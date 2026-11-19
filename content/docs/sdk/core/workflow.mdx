@@ -405,10 +405,28 @@ Artifact `id` uniqueness is enforced only where edge resolution needs it
 - **input** `id`s must be unique **within each task**;
 - **root** artifact `id`s must be unique among the root artifacts.
 
+A task may not use one `id` as both an input and an output
+(`SharedInputOutputIdError`). Substitution keys both by `id`, so the output
+would shadow the input. `add_task` and `expand` check this too.
+
 Output `id`s may now **repeat across tasks**: because edges resolve on
 `(task id, output id)` and task `id`s are unique, the same reusable task (sharing
 a `definition_id`) can be placed in a workflow more than once, each placement
 keeping its own unique task `id`.
+
+## Output paths
+
+Two tasks may not write the same output path, or one inside the other's
+(`OverlappingOutputPathsError`). A folder's digest covers every file under it,
+so a second task writing into it changes the digest between runs and breaks
+[incremental skipping](/sdk/core/task#horustask).
+
+Allowed:
+
+- outputs of the same task;
+- a task expanded from another inside its owner's output: map slots
+  (`m[0]`), loop iterations (`l#1`) and subworkflow children (`s/x`);
+- an in-place output: a task whose output path is one of its own input paths.
 
 ## DAG planning
 

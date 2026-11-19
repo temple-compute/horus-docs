@@ -129,8 +129,9 @@ output to another task's input, and the consumer keeps its own input `id`
 regardless of what the producer named its output. See
 [DAG planning](/sdk/core/workflow#dag-planning) and [edges](/sdk/core/workflow#edges).
 
-Output and input `id`s must be unique **within a task**, but the same output
-`id` may appear on different tasks. Runtimes that need a name→artifact mapping
+Output and input `id`s must be unique **within a task**, and no `id` may be
+both an input and an output of the same task. The same output `id` may appear
+on different tasks. Runtimes that need a name→artifact mapping
 (for example to format a shell command or inject function parameters) build it
 on the fly, keyed by `artifact.id`, from that task's own inputs and outputs.
 
@@ -236,6 +237,11 @@ before its own cleanup runs: a middleware that uploads the task's log file in
 a `finally` uploads a log that ends with the error. `reset()` and the next
 run clear `error`. The timing middleware reports how the task ended
 ("completed in", "failed after", "was canceled after").
+
+A task with a [`retry`](/guides/writing-workflows-yaml#retry-optional) is set
+`PENDING` instead of `FAILED` when the scheduler will run it again, so no
+status update shows a failure first. A map clone that exits with one of its
+map's `drop_exit_codes` ends `SKIPPED` with `skip_reason` `dropped`.
 
 ## Built-in Tasks
 
