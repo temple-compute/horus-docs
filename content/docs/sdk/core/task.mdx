@@ -129,8 +129,9 @@ output to another task's input, and the consumer keeps its own input `id`
 regardless of what the producer named its output. See
 [DAG planning](/sdk/core/workflow#dag-planning) and [edges](/sdk/core/workflow#edges).
 
-Output and input `id`s must be unique **within a task**, but the same output
-`id` may appear on different tasks. Runtimes that need a name→artifact mapping
+Output and input `id`s must be unique **within a task**, and no `id` may be
+both an input and an output of the same task. The same output `id` may appear
+on different tasks. Runtimes that need a name→artifact mapping
 (for example to format a shell command or inject function parameters) build it
 on the fly, keyed by `artifact.id`, from that task's own inputs and outputs.
 

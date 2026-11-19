@@ -129,6 +129,11 @@ outputs:
 Each artifact has an `id` (unique within the task's inputs or outputs) and a
 `path`. A task counts as complete when all of its `outputs` exist on disk.
 
+A task cannot use one `id` for both an input and an output. Two tasks cannot
+write the same output path, or one inside the other's; a map's slots, loop
+iterations, subworkflow children and a task writing back to its own input path
+are allowed. See [Output paths](/sdk/core/workflow#output-paths).
+
 An artifact may also carry `labels`, a free-form `string: string` mapping the
 runtime never reads:
 
