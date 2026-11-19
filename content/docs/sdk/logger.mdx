@@ -62,6 +62,27 @@ logs/log_YYYY-MM-DD.log
 
 The directory is created automatically if it does not exist.
 
+## Task log files
+
+Each task also writes its own log to `<LOG_DIRECTORY>/<task id>.log` (a `/`
+in the id becomes `_`), attached to the task as the side artifact
+`<task id>_logs`. It holds the task's log records and its stdout and stderr.
+
+Every run of the task starts with a header line:
+
+```
+--- attempt 1 ---
+```
+
+The first attempt in a workflow run starts a fresh file. A
+[retry](/guides/writing-workflows-yaml#retry-optional) appends `--- attempt 2 ---` and
+so on, so the file keeps every attempt.
+
+A command's stderr is logged at `INFO`, like its stdout: tools write progress
+there, and a failure is the exit code, not the stream. When a shell command
+exits non-zero, its `ERROR` line ends with the last 20 lines it wrote to
+stderr, which `CommandFailedError.output` also holds.
+
 ## Why Not `print()`?
 
 `print()` should **never be used** in `horus-runtime`. Always use the configured logger so logs remain structured, persistent, and configurable.
