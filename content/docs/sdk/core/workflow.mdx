@@ -243,7 +243,8 @@ identical to the old behaviour when it does not apply: no capacity declared, or
 `resources=None`, or an unknown location, all acquire immediately, with
 `max_concurrency` still enforced on top. A request that exceeds a location's
 total capacity raises `InsufficientCapacityError` immediately instead of
-blocking the ready-set loop.
+blocking the ready-set loop. A task that has to wait emits one `HorusTaskEvent`
+with `data.wait` (see [Where clones run](/guides/fan-out-fan-in#where-clones-run)).
 
 Capacity accounting lives in a single workflow-level placement manager,
 exposed as the `placement` property. The scheduler and any composite task that

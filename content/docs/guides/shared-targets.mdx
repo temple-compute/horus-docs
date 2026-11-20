@@ -91,4 +91,5 @@ that loses its machine is not a task failure:
 
 `max_parallel` caps how many members, map clones included, run on the machine
 at once. Unset means no cap beyond a map's `max_concurrency` and the
-workflow's [`capacity`](/sdk/core/workflow#capacity). Extra members wait for a free slot.
+workflow's [`capacity`](/sdk/core/workflow#capacity). Extra members wait for a free slot
+and emit a [wait event](/guides/fan-out-fan-in#where-clones-run) with reason `max_parallel`.
