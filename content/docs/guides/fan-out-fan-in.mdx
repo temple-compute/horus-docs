@@ -103,6 +103,7 @@ horus run score_batches.yaml --trigger split
 | `zip` | more map outputs paired by item, `[{input_id, as}]` |
 | `drop_exit_codes` | exit codes (1 to 255) that drop an item instead of failing it |
 | `retry` | retries each item on its own; see [Retrying an item](#retrying-an-item) |
+| `slot_names` | `index` (default) or `item`; see [Naming slots by item](#naming-slots-by-item) |
 
 The map must declare **exactly one output**, and it must be a `folder`. That
 folder is the fan-in point: it holds one subdirectory per item, and it is what
@@ -194,6 +195,25 @@ Every map fed from one head map therefore shares one item space: slot `03` is
 the same item all the way down. If the head's collection changes (an item
 added or removed, or the count crosses 10, 100, ...), the later items get new
 slot names and run again down the chain.
+
+### Naming slots by item
+
+By default slots are numbered. Set `slot_names: item` to name each slot after
+its item:
+
+```yaml
+- id: align
+  kind: horus_map
+  over: {input_id: reads, as: sample}
+  slot_names: item
+```
+
+A file's name loses its suffixes (`s1.fastq.gz` becomes `s1`, so the clone is
+`align[s1]`); a folder keeps its name. Names must be unique and use letters,
+digits, `.`, `_` or `-` (64 characters at most, not starting with `.`, `_` or
+`-`). If one item breaks this, the whole map uses numbers and logs a warning.
+JSON-list items always use numbers. A map over another map's output keeps that
+map's slot names. Turning it on re-runs the map once.
 
 ## Running items through maps
 
@@ -451,6 +471,37 @@ bound the total.
 
 Every clone runs on its own copy of the map's target, which is what lets them
 run at the same time on a single declared target.
+
+### Where clones run
+
+Every clone of a map runs on the map's target. On a machine of known size (a
+cloud node, or a location under `capacity:`), clones that set `resources` run
+only while they fit, and the rest wait.
+
+A waiting clone reports why in its log, and as a task event with `data.wait`:
+
+```json
+{"wait": {"reason": "resources", "target": "big-node",
+          "needs": {"memory_gb": 56}, "free": {"memory_gb": 8}}}
+```
+
+`reason` is `resources` (not enough free cpus, gpus, memory_gb or vram_gb) or
+`max_parallel` (every slot of the target's
+[`max_parallel`](/guides/shared-targets#parallel-members) is taken; `needs` is
+`{"slots": 1}`). The event is sent once per wait.
+
+### Sizing
+
+When a map starts, it warns if its machine fits fewer items at once than it
+would run (the smallest of the item count, `max_concurrency` and
+`max_parallel`):
+
+```
+Map align fits 1 of 8 items at once on big-node.
+```
+
+The event carries `data.sizing` with `fits`, `items` and `target`. Use a larger
+machine or smaller `resources` to run more items side by side.
 
 ## Skipping and resuming
 
