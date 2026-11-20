@@ -117,6 +117,10 @@ aliased to `_(...)`) so descriptions are translatable without depending on
   `PythonFunctionRuntime` in a subprocess on the task's target. See
   [External Python functions](#external-python-functions).
 
+The `horus-environments` plugin adds `conda_python_environment`,
+`uv_python_environment` and `virtualenv_python_environment`. See
+[Shared Python environments](#shared-python-environments).
+
 ### External Python functions
 
 The function's outcome comes back as JSON. It may return:
@@ -142,6 +146,29 @@ directory, or to `HORUS_SIDE_ARTIFACTS_DIR`, instead.
 - The `python` field names one interpreter executable, such as
   `.horus_python_environment/bin/python`. Multi-word commands like
   `conda run -n env python` are no longer accepted.
+
+### Shared Python environments
+
+From `horus-environments` 0.1.8, a Python environment executor with the default
+`environment_dir` builds its env once and reuses it across tasks and runs. The
+env lives in `$HORUS_ENV_ROOT` on the target, else in `.horus_envs` in the
+target working directory, in a directory keyed by the spec: backend,
+`requirements`, interpreter, conda packages and channels, `environment_file`
+content and `env`. Any change builds a new env.
+
+- A shared env is reused only once fully built. A build that was killed or
+  failed is rebuilt on the next run.
+- Pip runs only at build time, and a ready env is read-only. Put every package
+  in the spec, not in the task command.
+- Pin versions: a shared env keeps the versions of its first build.
+- `recreate: true` or an explicit `environment_dir` gives the task its own env.
+- The env stays per task when the target has no `flock`, or when
+  `requirements` or `environment_file` refer to local paths, URLs or pip
+  options (`.`, `-e`, `-r`).
+
+`HORUS_ENV_ROOT` comes from the target's environment, not from `env`. On
+Temple Compute OS, the Shared machine sets it per organization, so runs in
+your organization share envs and other organizations never see them.
 
 ## Example
 
