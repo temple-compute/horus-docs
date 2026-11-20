@@ -21,6 +21,15 @@ mode; see [Resource charts and profiling](#resource-charts-and-profiling).
   contact Temple Compute.
 </Callout>
 
+## Firewalls
+
+Temple Compute OS connects to SSH and Slurm machines from one fixed address,
+`51.20.88.116`. Allow inbound SSH from it in the machine's firewall or security
+group.
+
+A machine reachable only through a VPN needs the agent instead. The agent
+connects out, so you open nothing.
+
 ## Requirements
 
 - Linux or macOS, with Python 3.13 or newer. [uv](https://docs.astral.sh/uv/)
