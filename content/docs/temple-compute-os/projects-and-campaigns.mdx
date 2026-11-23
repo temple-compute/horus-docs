@@ -24,7 +24,8 @@ Open **Projects** in the sidebar and click **New project**. Give it a name.
 A project belongs to the organization that is active in the sidebar switcher,
 and everyone in that organization can see it. The projects list shows only the
 active organization's projects, with how many workflows, campaigns and runs each
-one has. Use **Search projects** to filter by name.
+one has. The figures above it count pinned workflows, campaigns, active
+campaigns and runs. Use **Search projects** to filter by name.
 
 ![The projects list](/img/ui/projects-list.webp)
 
@@ -40,13 +41,13 @@ the header, or **Add to project** in the **More** menu on a narrow screen).
 1. Pick a **Project**, or click **New project** to create one here.
 2. Optionally add a **Version label** that says what makes this version
    special, for example "Validated on the Q3 set".
-3. Decide what happens to the inputs:
-   - With **Start with empty inputs** ticked (the default), the values you were
-     testing with are cleared, so each campaign fills in its own. Untick a
-     single input in the list below the checkbox to keep it fixed for every
-     campaign instead.
-   - Untick **Start with empty inputs** to keep every input as it is.
-4. Click **Add to project**.
+3. Under **Which inputs must be provided for each campaign?**, tick the inputs
+   each campaign fills in. Unticked inputs keep their current value for every
+   campaign.
+4. Under **Start from**, pick the task every campaign of this version starts
+   from. The default, **Automatic**, is the task that runs the most of the
+   workflow.
+5. Click **Add to project**.
 
 The app freezes the draft as it is now into a new version and pins it to the
 project. You can keep editing the draft afterwards; pin it again to add the next
@@ -58,8 +59,8 @@ version.
 
 A project page shows:
 
-- **Pinned workflows**, **Campaigns** (and how many are active) and **Runs
-  launched** (and how many are in flight) at the top.
+- **Pinned workflows**, **Campaigns** (and how many are active), **Runs
+  launched** (and how many are in flight) and **Campaign cost** at the top.
 - **Pinned workflows**: each frozen version, with its label, task count,
   campaign count and the date it was pinned. Each row has:
   - **Open design**: open the source workflow's draft on the canvas.
@@ -86,10 +87,11 @@ Click **Launch campaign** on a pinned workflow.
    inputs: every input the workflow declares is shown with the same viewer as on
    the canvas, so a structure opens in the 3D viewer, a script in the editor and
    a CSV as a table. Every run uses these exact values.
-3. Under **Start from**, pick the task each run starts from. The default is the
-   task that covers the most of the workflow, and the form says how many of the
-   blocks that will run.
-4. Click **Start N runs**.
+3. Check **Targets**: every task with the target it runs on and its resources.
+   **Create targets** gives tasks without one the smallest cloud instance that
+   fits their resources. The page also says which task every run starts from.
+4. Click **Start N runs**. If some tasks still have no target, choose whether
+   to run them on the platform target, at no cost, or on new cloud targets.
 
 ![Setting up a campaign](/img/ui/campaign-setup.webp)
 
@@ -98,7 +100,7 @@ Click **Launch campaign** on a pinned workflow.
 ![A campaign in progress](/img/ui/campaign-detail.webp)
 
 The campaign page shows how many runs **Succeeded**, **Failed** and are **In
-flight**, and lists every run with its start time, duration and status. Runs do
+flight**, what the campaign cost, and lists every run with its start time, duration and status. Runs do
 not all start at once: more start as slots free up. The page refreshes on its
 own.
 

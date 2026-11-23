@@ -16,6 +16,7 @@ above the card). Before you click, hovering the button highlights every task the
 run will include: the task you picked, the tasks upstream of it that it depends
 on, and the tasks downstream that consume its outputs. This is the same rule as
 `horus run --trigger` (see [Running workflows](/guides/running-workflows)).
+You can also click **Run** in the header (**Re-run** on a past run).
 
 The app checks the workflow, creates the run and switches the canvas to it.
 
@@ -38,15 +39,15 @@ A few things to know:
 
 ![A completed run on the canvas](/img/ui/canvas-run.webp)
 
-While a run is on screen the header badge reads **Run #N** and shows the run's
-status. The graph is read-only: the tools that add or connect blocks are turned
+While a run is on screen the run picker in the header reads **Run #N**, next to
+the run's status. The graph is read-only: the tools that add or connect blocks are turned
 off, and the edit and delete buttons disappear from the cards. You can still
 move blocks, auto-arrange them and change the view; that layout is saved with
 the run.
 
 Each task card shows:
 
-- A **status dot** (hover it to see the status) and how long the task took.
+- A **footer** with the task's status, how long it took, and its resources.
 - A small **tray** next to the card with the files the task produced as a side
   effect, such as its log and its resource trace. Click one to preview it.
 
@@ -69,18 +70,20 @@ Run and task statuses:
 
 ![The workflow header while a run is shown](/img/ui/workflow-header-run.webp)
 
-In run view, the header gains three buttons:
+In run view, the header shows how long the run took and what it cost, and
+**Re-run** starts a new run from this one. The **More** (`…`) menu gains a
+section for the run:
 
-- **+ New design from this run**: replace the draft with this run's workflow.
+- **New draft from run #N**: replace the draft with this run's workflow.
   See below.
-- **Logs** (scroll icon): the run's log.
-- **Resource usage** (pulse icon): measured CPU, memory and GPU per task.
+- **Run logs**: the run's log.
+- **Run lineage**, **Share results** and **Delete run**.
 
 ## Switching between runs
 
-Click the **run history** button (clock icon) in the header. The list shows the
-draft (`#0`) and every run with its status and start time. A check mark shows
-which one is on screen.
+Click the **Runs** button (clock icon) in the header. The list shows the
+draft (`#0`) and every run with its status, start time and cost. A check mark
+shows which one is on screen.
 
 ![The run history list](/img/ui/runs-history.webp)
 
@@ -105,9 +108,11 @@ full screen.
 
 ![Run resource usage](/img/ui/run-resources.webp)
 
-For each task, the resource panel shows its duration, peak and mean CPU, peak and
-mean memory, and the number of samples taken, with a CPU and a memory chart over
-time. GPU usage is shown when the task used a GPU. Use it to check whether the
+Each task's tray has a resource trace (pulse icon). Hover it for a summary, or
+click it to open `resource-usage.csv` in the preview panel. It shows the
+machine the task ran on, its duration, peak and mean CPU, peak and mean memory,
+and the number of samples taken, with a CPU and a memory chart over time. GPU
+usage is shown when the task used a GPU. Use it to check whether the
 [resources](/temple-compute-os/designing-workflows#editing-a-task) you requested
 match what the task actually needed. Tasks on [strict agents](/temple-compute-os/agents#resource-charts-and-profiling) have no resource charts.
 
@@ -119,13 +124,15 @@ Hover the spinner: it turns into a red **×**. Click it to cancel the run.
 ## Start a new design from a run
 
 To pick up from an earlier run, for example to retry with the exact settings
-that worked last week, open that run and click **+** in the header. The app asks
+that worked last week, open that run and choose **New draft from run #N** in
+the header's **More** (`…`) menu. The app asks
 you to confirm, then **overwrites the draft** with that run's workflow and
 switches to design mode.
 
 <Callout type="warn" title="This replaces the draft">
 
 Any changes in the current draft that you have not run yet are lost. If you want
-to keep them, export the workflow first (download icon in the header).
+to keep them, export the workflow first (**Export workflow (.zip)** in the
+**More** menu).
 
 </Callout>

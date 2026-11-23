@@ -7,8 +7,8 @@ Opening a workflow shows it on the **canvas**. What you can do there depends on
 which version of the workflow is on screen:
 
 - **Design mode** shows the **draft**, the editable version of the workflow.
-  The badge in the header reads **Design**.
-- **Run view** shows one past or running **run**. The badge reads
+  The run picker in the header reads **Runs**.
+- **Run view** shows one past or running **run**. The run picker reads
   **Run #N**, and the graph is read-only. See [Runs](/temple-compute-os/runs).
 
 A workflow always opens on its draft. Your edits save automatically as you make
@@ -24,7 +24,7 @@ new run, so editing the draft afterwards never changes a run that already
 exists.
 
 The draft appears as **#0 draft** at the top of the run history list (the
-clock button in the header). Pick it to get back to design mode from any run.
+**Runs** button in the header). Pick it to get back to design mode from any run.
 
 ![The run history list, with the draft at the top](/img/ui/runs-history.webp)
 
@@ -38,18 +38,26 @@ You can also go the other way and turn a run back into the draft. See
 From left to right:
 
 - **Workflow name**. Click it to rename the workflow (design mode only).
-- **Design / Run #N** badge: which version is on screen.
-- **Token balance**: tokens your organization has left this month, shared by
-  compute and AI chat. Hover it for the breakdown.
+- **Runs / Run #N** (clock icon): which version is on screen. Click it to
+  switch between the draft and any run.
 - **Status** of the version on screen (idle, queued, running, completed, failed,
   canceled, partial).
-- **Run history** (clock icon, with a count): switch between the draft and any run.
+- **Run #N** with its status (design mode only): open the latest run.
+- **Run**: start a run from the task that reaches the most of the workflow. If
+  no single task reaches every block, it asks which task to start from. In run
+  view the button reads **Re-run**.
+- **Token balance**: tokens your organization has left this month, shared by
+  compute and AI chat. Hover it for the breakdown.
 - **Add to project** (folder icon, design mode only): pin this version to a
   project. See [Projects and campaigns](/temple-compute-os/projects-and-campaigns).
-- **Artifacts panel**, **AI chat**, **YAML editor**: toggle side panels.
-- **Export** (download icon): download the workflow as a `.zip`, with its input files.
-- **More** (`…`): **Publish to Library**, **Force re-run all tasks**,
-  **Debug logging** (when you have permission), and **Delete workflow**.
+- **Artifacts panel**, **Tasks panel** (every task as a table you can search,
+  sort and edit in batches), **Blocks panel** (design mode only) and **AI
+  chat**: toggle side panels.
+- **More** (`…`): the **YAML editor**, run options (**Run from task**, **Force
+  re-run all tasks**, **Max parallel tasks**, **Stop the run when a task
+  fails**, and **Debug logging** when you have permission), **Publish to
+  Library**, **Export workflow (.zip)** with its input files, **Reset
+  workflow**, and **Delete workflow**.
 
 On a narrow screen the panel toggles move into the **More** menu.
 
@@ -62,20 +70,29 @@ canvas does. Each tool has a keyboard shortcut.
 
 | Tool | Key | What it does |
 |------|-----|--------------|
-| Select | `V` | Click to select, drag on empty canvas to draw a selection box, drag blocks to move them. |
 | Pan | `H` | Drag to move around the canvas. You can also pan with the middle or right mouse button, or hold Space and drag. |
-| New block | `B` | Click the canvas to place a new task there. |
+| Select | `V` | Click to select, drag on empty canvas to draw a selection box, drag blocks to move them. |
+| New task | `B` | Click the canvas to place a new task there. |
 | New input artifact | `A` | Click the canvas to place a workflow input (a file, folder, value, and so on). |
 | Connect | `C` | Drag between ports to connect them, without moving blocks by accident. |
 
-The last three buttons change only the view, so they also work on a run:
+Next to them, **Select all** selects every block.
+
+The buttons after the second divider change only the view, so they also work on a run:
 
 - **Compact edges**: draw one edge per pair of connected tasks instead of one per artifact.
+- **Shared input wires**: draw the wires of an input shared by several tasks,
+  instead of labelling it at each port.
 - **Hover fade**: when you hover a block, fade everything not connected to it.
   Hold `Ctrl` or `⌘` to preview this without turning it on.
 - **Auto layout**: arrange the blocks automatically.
+- **Follow run**: keep the running tasks in view while a run is in progress.
+  Move the canvas to pause it.
 
-The **New block**, **New input artifact** and **Connect** tools are turned off
+In design mode, **Group identical targets** lets tasks with identical cloud
+targets that run one after another share one machine.
+
+The **New task**, **New input artifact** and **Connect** tools are turned off
 in run view. Hover one to see why.
 
 Other shortcuts:
@@ -94,12 +111,12 @@ The zoom controls and the minimap are in the bottom corners of the canvas.
 
 There are three ways to add something to the canvas:
 
-- Pick **New block** or **New input artifact** in the toolbar, then click where
-  it should go. On an empty canvas, the **Add your first block** button does the same.
+- Pick **New task** or **New input artifact** in the toolbar, then click where
+  it should go. On an empty canvas, the **Add your first task** button does the same.
 - **Right-click** an empty part of the canvas. A dialog asks whether to add a
-  **Task**, an **Input Artifact**, or a **Workflow from library** (a saved
-  workflow inserted as a subworkflow).
-- Hover an edge and click **Insert a block here** to splice a task into an
+  **Task**, an **Input Artifact**, a **Workflow from library** (a saved
+  workflow inserted as a subworkflow), or a **Block from library**.
+- Hover an edge and click **Insert a task here** to splice a task into an
   existing connection. The new task opens already wired to the artifact that
   was flowing along that edge.
 
@@ -108,9 +125,9 @@ There are three ways to add something to the canvas:
 ## Editing a task
 
 Each task is a card on the canvas. Its name and kind are at the top, its input
-ports on the left and its output ports on the right. The icons under the card
-show its **Runtime**, **Executor**, **Target** and **Resources**; click one to
-edit that part directly.
+ports on the left and its output ports on the right. The card lists its
+**Runtime**, **Executor** and **Target**, and its footer shows its
+**Resources** and **Secrets**; click one to edit that part directly.
 
 A toolbar floats above each card:
 
@@ -118,22 +135,28 @@ A toolbar floats above each card:
 |--------|--------------|
 | **Execute from this task** (play icon) | Start a run. Hover it first to highlight every task that run will include. |
 | **Edit task** (pencil icon) | Open the task editor. |
-| **Save as reusable block** (disk icon) | Save this task to your library, so you can reuse it in any task later. |
+| **Publish as block** (disk icon) | Publish this task as a block in the Library, so you can reuse it in any workflow. |
 | **Delete task** (bin icon) | Remove the task and its connections. |
 
-The task editor walks through five steps. You can jump between them on the
+Next to the toolbar, **Reuse cached results** (database icon) turns caching on
+or off for the task: while it is on, the task is skipped when its inputs are
+unchanged.
+
+The task editor walks through six steps. You can jump between them on the
 left, and **Save** at any point.
 
 ![The task editor](/img/ui/edit-task.webp)
 
 1. **Task kind**: the block type (a plain Horus task, a branch router, a loop
-   controller, a map, a subworkflow, or any kind a plugin adds), plus a name
-   and description.
+   controller, a map, a subworkflow, or any kind a plugin adds), plus a name,
+   a description and retries.
 2. **What**: the runtime (for example a shell command or a Python function),
    its contents, and the task's inputs and outputs.
 3. **How**: the executor that runs it.
 4. **Where**: the target machine it runs on.
-5. **Resources**: optional hints such as CPUs, GPUs, memory and walltime.
+5. **Secrets**: credentials the task receives as environment variables. See
+   [Handling secrets](/guides/handling-secrets).
+6. **Resources**: optional hints such as CPUs, GPUs, memory and walltime.
 
 These map one-to-one onto the fields of a task in
 [YAML](/guides/writing-workflows-yaml); see
