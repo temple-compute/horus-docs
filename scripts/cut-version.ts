@@ -98,4 +98,4 @@ try {
   throw e;
 }
 
-console.log(`main: listed ${v}\n${v}: worker ${worker}\nnext: git push origin main ${v}`);
+console.log(`main: listed ${v}\n${v}: worker ${worker}\nnext: git push origin ${v}, set up the worker (DEPLOYMENT.md), then git push origin main`);
