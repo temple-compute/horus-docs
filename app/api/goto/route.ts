@@ -4,5 +4,6 @@ import { source } from '@/lib/source';
 export function GET(request: Request) {
   const url = new URL(request.url);
   const slug = (url.searchParams.get('path') ?? '').split('/').filter(Boolean);
-  return Response.redirect(new URL(source.getPage(slug)?.url ?? '/', url), 302);
+  // Relative Location, so the redirect never takes its host from the request.
+  return new Response(null, { status: 302, headers: { Location: source.getPage(slug)?.url ?? '/' } });
 }

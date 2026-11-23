@@ -98,7 +98,7 @@ The docs track `horus-runtime` minor releases. Each one gets a frozen branch and
 
 - `lib/versions.ts` holds `version` (`'latest'` on `main`, `'v0.12'` on its branch) and the list
   of cut versions. The version menu, the old-version banner and `noindex` all read from it.
-- Old versions fetch the list from latest (`/api/versions`), so their menu shows versions cut or
+- Old versions fetch the list from latest (`/api/versions`), so their menu reflects versions cut or
   retired after them. The built-in list is the fallback.
 - Menu and banner links go through `/api/goto` on the target version, which opens the same page
   there, or its home page if that version does not have it.
