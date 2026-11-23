@@ -155,3 +155,160 @@ Fix: add "and delete its certificate under SSL/TLS → Edge Certificates".
   just under the "Horus Guides" switcher. It works, but a reader may not see it as a version
   picker. Optionally render it as a dropdown like "Horus Guides" (sidebar `banner` slot). This is
   part of finding 6 and not counted separately.
+
+## Round 2
+
+Scope: commits `4d9620f`, `ddb9853`, `c4157ad` and `2ad6d3e` (after `e394e70`).
+
+Totals: 0 high, 1 medium, 2 low, 7 nit.
+
+### Round 1 status
+
+| # | Finding | Status |
+|---|---------|--------|
+| 1 | Partial cut leaves half-done state | Fixed. All `replace` checks run before the first write, and a failed commit rolls back. Reproduced with a pre-commit hook that fails only on the version branch: `main` returns to the start SHA, no `v0.13` branch, clean tree. |
+| 2 | Retired versions stay in the menu | Fixed with `--retire` and the fetched list. See round-2 finding 1 for a bug in the retire rollback. |
+| 3 | Version links open a new tab | Fixed. Menu items are plain `<a>` with no `target` (checked in the browser). |
+| 4 | Frozen versions never list newer ones | Fixed. Old versions fetch `/api/versions` from latest. See round-2 findings 2 and 3. |
+| 5 | Branch-control step after the first push | Fixed. It is now a "once, before the first cut" note. |
+| 6 | Version switch goes to the home page | Fixed with `/api/goto`. Menu and banner link to the same page. |
+| 7 | Guards miss remote state and cwd | Fixed: `fetch` and `main == origin/main`, `ls-remote` check, `chdir` to the repo root. A retire after an unpushed cut fails on "main does not match origin/main". |
+| 8 | Canonical to latest can 404 | Not changed. No fix was required. |
+| 9 | Slug rule written twice | Fixed. `versionSlug` is exported and the script imports it. |
+| 10 | Leftover certificate on retire | Fixed in DEPLOYMENT.md. The script's message still omits it (round-2 finding 9). |
+| UI | `&nbsp;` in the banner | Fixed. It is now `{' '}`. |
+
+### What was checked
+
+- `bun run typecheck` and `bun run build:next` pass. `/api/goto` is dynamic, and `/api/versions` is static.
+- `/api/goto` probed on `next start` and on the OpenNext build under `wrangler dev` (workerd). It
+  only redirects to a URL from `source.getPage()`, which comes from content, never from the
+  query. Every crafted input went to `/` on the same host: `//evil.com`, `///evil.com`,
+  `\\evil.com`, `/\\evil.com`, `%2F%2Fevil.com`, `%252F%252Fevil.com`, `https://evil.com`,
+  `https:%2F%2Fevil.com`, `javascript:alert(1)`, `@evil.com`, `/../../etc/passwd`,
+  `/guides/../guides/concepts`, `/guides/%2e%2e/concepts`, CRLF with `Set-Cookie` or `Location`,
+  a repeated `path`, and no `path` at all. CRLF never reaches a header. Valid paths
+  (`/guides/concepts`, `guides/concepts`) resolve. The 302 has no `Cache-Control`.
+- `/api/versions` under workerd returns `Access-Control-Allow-Origin: *`, `application/json`,
+  no `Set-Cookie` and no `Allow-Credentials`. The client fetch sends no credentials (default mode
+  on a cross-origin request). `OPTIONS` returns 405, which is fine because a simple GET needs no
+  preflight. The client accepts only an array of `vX.Y` strings, so a hostile response cannot inject
+  a host. Tested with `["v0.12","evil.com/x"]`, which was ignored.
+- Menu in headless Chromium on a scratch old-version build (`v0.12`, list `['v0.13','v0.12']`),
+  at 1280 and 390 px wide. Links point to `<host>/api/goto?path=%2Fguides%2Fconcepts`. The links
+  are reachable with Tab. When the fetch fails (production has no `/api/versions` yet, so CORS
+  blocks it), the menu keeps the built-in list. One console error is logged.
+- `cut-version.ts` run in a scratch clone with a local bare origin: happy path, rollback on a
+  failed second commit, and the retire failure below.
+
+### 1. Medium: a failed retire deletes the version branch it is told to keep
+
+`scripts/cut-version.ts:53-56`, `:66`
+
+`rollback()` is shared by cut and retire, and always runs `git branch -D v` when the branch
+exists. A retire runs on a version whose branch normally exists locally, and DEPLOYMENT.md says to
+keep it. Reproduced: local `v0.10` with an unpushed commit, a pre-commit hook that fails, and then
+`--retire 0.10`. The commit fails, and afterwards `git branch --list v0.10` is empty. A failed GPG
+signature triggers the same path.
+
+Fix: delete the branch only on the cut path, for example with a `created` flag set after
+`git switch -c`, or by not calling the branch deletion from the retire `catch`.
+
+### 2. Low: an old version's menu can drop the version being viewed
+
+`components/version-links.tsx:25`
+
+The fetched list replaces the built-in one, including the empty list. DEPLOYMENT.md has you push
+`v0.12` and bring its worker live before you push `main`. In that window latest serves `[]` or a
+list without `v0.12`, so on `v0-12…` the menu labelled "v0.12" shows only "Latest". Reproduced
+with a mocked `[]` response: the menu goes from "Latest, v0.13, v0.12" to "Latest". The same
+happens on a retired version between `git push origin main` and deleting its worker.
+
+Fix: when `!isLatest`, keep `version` in the list (merge it in if the fetched list lacks it),
+or keep the built-in list when the fetched one does not include `version`.
+
+### 3. Low: the menu refetches on open and reorders while open
+
+`components/version-links.tsx:20-28`
+
+On desktop the popover mounts `VersionLinks` when opened, so the fetch starts then, and the
+list changes under the cursor when it lands. With a mocked 800 ms response, `v0.14` was inserted
+and the items below it moved 36 px down. On mobile the sidebar remounts it, which gave two
+requests in one visit. There is no page layout shift, only inside the menu.
+
+Fix: start the fetch once per page load at module level (a module-scoped promise), and render
+from its cached result. Optionally kick it off from `LatestLink`, which mounts with the banner.
+
+### 4. Nit: `/api/goto` builds `Location` from the request host
+
+`app/api/goto/route.ts:7`
+
+`new URL(…, request.url)` takes the host from the request. Under `wrangler dev`,
+`Host: evil.com` gave `Location: http://evil.com/guides/concepts`. In production Cloudflare
+routes by hostname, so only a request already sent to this worker's own domain reaches it, and the
+302 is not cached. It is not exploitable as it stands, but it depends on that.
+
+Fix: send a relative `Location`:
+`new Response(null, { status: 302, headers: { Location: page?.url ?? '/' } })`.
+
+### 5. Nit: the list parser drops entries it does not recognise
+
+`scripts/cut-version.ts:48`
+
+`listed` only matches single-quoted entries, and `withList` rewrites the whole array from it. A
+double-quoted entry (after a formatter run or a hand edit) is silently dropped on the next cut or
+retire. A list wrapped over several lines fails safely on "versions list not found".
+
+Fix: fail if the parsed count differs from the number of comma-separated entries, or match both
+quote styles.
+
+### 6. Nit: `--retire` only works as the first argument
+
+`scripts/cut-version.ts:33-34`
+
+`bun scripts/cut-version.ts 0.10 --retire` runs a cut and ignores the flag. For a listed version
+it fails on "already listed". For an unlisted one it cuts.
+
+Fix: look for `--retire` anywhere in `argv` and reject extra arguments.
+
+### 7. Nit: the remote branch check matches by suffix
+
+`scripts/cut-version.ts:75`
+
+`git ls-remote --heads origin v0.12` matches any ref ending in `v0.12`, such as
+`refs/heads/backport/v0.12`, so the cut refuses when it should not.
+
+Fix: `git ls-remote --heads origin refs/heads/${v}`.
+
+### 8. Nit: the menu does not mark the current version, and the switch drops the anchor
+
+`components/version-links.tsx:31-37`, `lib/versions.ts:21`
+
+The item for the version being viewed has no `aria-current` or visual state, so a screen reader
+user hears the same list on every version. `usePathname()` has no `#hash`, so switching from
+`/guides/concepts#retries` lands at the top of the page.
+
+Fix: add `aria-current="page"` (and the active style) to the matching item. Optionally carry
+`location.hash` at click time.
+
+### 9. Nit: the retire message omits the domain and certificate
+
+`scripts/cut-version.ts:69`
+
+It says "delete worker horus-docs-v0-10". DEPLOYMENT.md also deletes the custom domain and its
+certificate, and deleting the domain does not remove the certificate.
+
+Fix: mention both, or say "see DEPLOYMENT.md" as the cut message does.
+
+### 10. Nit: DEPLOYMENT.md says old menus "show" retired versions
+
+`DEPLOYMENT.md:101-102`
+
+"their menu shows versions cut or retired after them" reads as if retired versions stay listed.
+
+Fix: "their menu reflects versions cut or retired after them".
+
+### Verdict
+
+FIX. Finding 1 can delete unpushed work, and finding 2 shows a wrong menu on every cut. Both
+are a few lines. The rest can merge as is.
