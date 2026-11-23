@@ -3,7 +3,7 @@
 export const version: string = 'latest';
 
 // Cut versions, newest first. scripts/cut-version.ts edits this list on main.
-export const versions: string[] = [];
+export const versions: string[] = ['v0.12'];
 
 export const isLatest = version === 'latest';
 export const latestUrl = 'https://docs.templecompute.com';
