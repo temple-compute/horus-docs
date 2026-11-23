@@ -97,7 +97,11 @@ The docs track `horus-runtime` minor releases. Each one gets a frozen branch and
 | `v0.12` | `horus-docs-v0-12` | `v0-12.docs.templecompute.com` |
 
 - `lib/versions.ts` holds `version` (`'latest'` on `main`, `'v0.12'` on its branch) and the list
-  of cut versions. The nav menu, the old-version banner and `noindex` all read from it.
+  of cut versions. The version menu, the old-version banner and `noindex` all read from it.
+- Old versions fetch the list from latest (`/api/versions`), so their menu shows versions cut or
+  retired after them. The built-in list is the fallback.
+- Menu and banner links go through `/api/goto` on the target version, which opens the same page
+  there, or its home page if that version does not have it.
 - Old versions set `noindex`. Every page's canonical URL points at `docs.templecompute.com`
   (`metadataBase`), so only latest is indexed.
 - Hosts are one level under `docs.templecompute.com`. Universal SSL does not cover that depth,
@@ -108,30 +112,45 @@ The docs track `horus-runtime` minor releases. Each one gets a frozen branch and
   on `main` cannot break them.
 - On a version branch `wrangler.jsonc` uses the version worker name for both `name` and the
   `WORKER_SELF_REFERENCE` service (they must match, see Troubleshooting).
-- Keep the current version and the two before it live. Delete older workers and their custom
-  domains.
+- Keep the current version and the two before it live.
 
 ### Cut a version
 
-At each `horus-runtime` minor release, from a clean `main`:
+Once, before the first cut: `horus-docs` → **Settings → Build → Branch control**, exclude `v*`
+from non-production builds. Otherwise it also builds version branches and fails on the worker
+name.
+
+At each `horus-runtime` minor release, from a clean `main` that matches `origin/main`:
 
 ```bash
 bun scripts/cut-version.ts 0.12
-git push origin main v0.12
+git push origin v0.12
 ```
 
 The script commits `v0.12` to the list on `main`, then creates branch `v0.12` with `version` set
-and the worker renamed to `horus-docs-v0-12`. It does not push.
+and the worker renamed to `horus-docs-v0-12`. All checks run before it writes anything, and it
+does not push.
 
-Then, once per version, in the Cloudflare dashboard:
+In the Cloudflare dashboard:
 
 1. Workers & Pages → **Create** → **Import a repository** → this repo. Worker name
    `horus-docs-v0-12`, production branch `v0.12`, build command `bun run build`, deploy command
    `npx wrangler deploy`. Turn off non-production branch builds.
 2. `horus-docs-v0-12` → **Settings → Domains & Routes → Add → Custom domain** →
    `v0-12.docs.templecompute.com`.
-3. Once only: `horus-docs` → **Settings → Build → Branch control**, exclude `v*` from
-   non-production builds. Otherwise it also builds version branches and fails on the worker name.
+
+Once the version is live, `git push origin main` to add it to the menu.
+
+### Retire a version
+
+```bash
+bun scripts/cut-version.ts --retire 0.10
+git push origin main
+```
+
+Then delete the `horus-docs-v0-10` worker with its custom domain, and the domain's certificate
+under **SSL/TLS → Edge Certificates** (deleting the domain does not remove it). Keep the `v0.10`
+branch.
 
 ## What the config files do
 
