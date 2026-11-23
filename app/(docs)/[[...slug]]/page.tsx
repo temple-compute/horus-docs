@@ -47,5 +47,7 @@ export async function generateMetadata(
   return {
     title: page.data.title,
     description: page.data.description,
+    // Resolved against metadataBase, so old versions point at latest.
+    alternates: { canonical: page.url },
   };
 }
