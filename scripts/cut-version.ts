@@ -30,8 +30,10 @@ function replace(src: string, file: string, from: string | RegExp, to: string): 
 
 process.chdir(git('rev-parse', '--show-toplevel'));
 
-const retire = process.argv[2] === '--retire';
-const arg = process.argv[retire ? 3 : 2] ?? '';
+const args = process.argv.slice(2);
+const retire = args.includes('--retire');
+const rest = args.filter((a) => a !== '--retire');
+const arg = rest.length === 1 ? rest[0] : '';
 if (!/^\d+\.\d+$/.test(arg)) fail('usage: bun scripts/cut-version.ts [--retire] <major.minor>, e.g. 0.12');
 const v = `v${arg}`;
 const worker = `horus-docs-${versionSlug(v)}`;
@@ -46,14 +48,17 @@ const versionsSrc = readFileSync(versionsFile, 'utf8');
 const listRe = /export const versions: string\[\] = \[(.*)\];/;
 const listMatch = versionsSrc.match(listRe) ?? fail(`${versionsFile}: versions list not found`);
 const listed = [...listMatch[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
+// Rewriting the list from `listed` would drop entries in any other format.
+if (listMatch[1].split(',').filter((x) => x.trim()).length !== listed.length) fail(`${versionsFile}: unexpected list format`);
 const withList = (list: string[]) =>
   replace(versionsSrc, versionsFile, listRe, `export const versions: string[] = [${list.map((x) => `'${x}'`).join(', ')}];`);
 
 const start = git('rev-parse', 'HEAD');
-function rollback() {
+// deleteBranch only for a cut: a retire must keep the version branch.
+function rollback(deleteBranch: boolean) {
   git('switch', '-q', '-f', 'main');
   git('reset', '-q', '--hard', start);
-  if (git('branch', '--list', v)) git('branch', '-q', '-D', v);
+  if (deleteBranch && git('branch', '--list', v)) git('branch', '-q', '-D', v);
 }
 
 if (retire) {
@@ -63,16 +68,16 @@ if (retire) {
     writeFileSync(versionsFile, mainVersions);
     git('commit', '-q', '-m', `docs: retire ${v}`, '--', versionsFile);
   } catch (e) {
-    rollback();
+    rollback(false);
     throw e;
   }
-  console.log(`main: retired ${v}\nnext: git push origin main, then delete worker ${worker}`);
+  console.log(`main: retired ${v}\nnext: git push origin main, then delete worker ${worker} (DEPLOYMENT.md)`);
   process.exit(0);
 }
 
 if (listed.includes(v)) fail(`${v} already listed`);
 if (git('branch', '--list', v)) fail(`branch ${v} already exists`);
-if (git('ls-remote', '--heads', 'origin', v)) fail(`branch ${v} already exists on origin`);
+if (git('ls-remote', '--heads', 'origin', `refs/heads/${v}`)) fail(`branch ${v} already exists on origin`);
 
 const mainVersions = withList([v, ...listed]);
 const branchVersions = replace(
@@ -85,16 +90,18 @@ let wrangler = readFileSync('wrangler.jsonc', 'utf8');
 wrangler = replace(wrangler, 'wrangler.jsonc', /"name": "horus-docs"/, `"name": "${worker}"`);
 wrangler = replace(wrangler, 'wrangler.jsonc', /"service": "horus-docs"/, `"service": "${worker}"`);
 
+let created = false;
 try {
   writeFileSync(versionsFile, mainVersions);
   git('commit', '-q', '-m', `docs: list ${v}`, '--', versionsFile);
   git('switch', '-q', '-c', v);
+  created = true;
   writeFileSync(versionsFile, branchVersions);
   writeFileSync('wrangler.jsonc', wrangler);
   git('commit', '-q', '-m', `docs: cut ${v}`, '--', versionsFile, 'wrangler.jsonc');
   git('switch', '-q', 'main');
 } catch (e) {
-  rollback();
+  rollback(created);
   throw e;
 }
 
