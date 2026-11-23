@@ -1,7 +1,8 @@
 import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
 import { Logotype } from '@/components/logotype';
+import { VersionLinks } from '@/components/version-links';
 import { appName, gitConfig } from './shared';
-import { isLatest, latestUrl, version, versions, versionUrl } from './versions';
+import { isLatest, version, versions } from './versions';
 
 export function baseOptions(): BaseLayoutProps {
   return {
@@ -15,10 +16,7 @@ export function baseOptions(): BaseLayoutProps {
           {
             type: 'menu',
             text: isLatest ? 'Latest' : version,
-            items: [
-              { text: 'Latest', url: latestUrl, active: 'none' },
-              ...versions.map((v) => ({ text: v, url: versionUrl(v), active: 'none' as const })),
-            ],
+            items: [{ type: 'custom', children: <VersionLinks /> }],
           },
         ]
       : [],
