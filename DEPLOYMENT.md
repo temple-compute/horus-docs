@@ -116,9 +116,9 @@ The docs track `horus-runtime` minor releases. Each one gets a frozen branch and
 
 ### Cut a version
 
-Once, before the first cut: `horus-docs` → **Settings → Build → Branch control**, exclude `v*`
-from non-production builds. Otherwise it also builds version branches and fails on the worker
-name.
+Workers Builds has no branch include/exclude filter, only a **Builds for non-production
+branches** checkbox. With it on, `horus-docs` also builds each push to a version branch. That
+build fails on the worker name and promotes nothing, so it can be ignored.
 
 At each `horus-runtime` minor release, from a clean `main` that matches `origin/main`:
 
@@ -134,9 +134,12 @@ does not push.
 In the Cloudflare dashboard:
 
 1. Workers & Pages → **Create** → **Import a repository** → this repo. Worker name
-   `horus-docs-v0-12`, production branch `v0.12`, build command `bun run build`, deploy command
-   `npx wrangler deploy`. Turn off non-production branch builds.
-2. `horus-docs-v0-12` → **Settings → Domains & Routes → Add → Custom domain** →
+   `horus-docs-v0-12`, build command `bun run build`, deploy command `npx wrangler deploy`.
+   Import has no branch field, so the first build runs from `main` and fails on the worker name.
+2. `horus-docs-v0-12` → **Settings → Build → Branch control**: set the production branch to
+   `v0.12` and turn off non-production branch builds. Then push a commit to `v0.12` (or retry the
+   build from the dashboard) to deploy it.
+3. `horus-docs-v0-12` → **Settings → Domains & Routes → Add → Custom domain** →
    `v0-12.docs.templecompute.com`.
 
 Once the version is live, `git push origin main` to add it to the menu.
