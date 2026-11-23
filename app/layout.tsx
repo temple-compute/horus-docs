@@ -1,6 +1,7 @@
 import { Inter } from 'next/font/google';
 import { Provider } from '@/components/provider';
 import type { Metadata } from 'next';
+import { isLatest } from '@/lib/versions';
 import './global.css';
 
 const inter = Inter({
@@ -21,6 +22,7 @@ export const metadata: Metadata = {
     description: 'Documentation for Horus and Temple Compute OS',
     images: '/img/horus.png',
   },
+  robots: isLatest ? undefined : { index: false },
 };
 
 export default function Layout({ children }: LayoutProps<'/'>) {
