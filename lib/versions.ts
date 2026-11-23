@@ -1,6 +1,6 @@
 // Docs version of this branch: 'latest' on main, 'vX.Y' on a version branch.
 // Set by scripts/cut-version.ts; see DEPLOYMENT.md.
-export const version: string = 'latest';
+export const version: string = 'v0.12';
 
 // Cut versions, newest first. scripts/cut-version.ts edits this list on main.
 export const versions: string[] = ['v0.12'];
