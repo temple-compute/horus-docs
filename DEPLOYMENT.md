@@ -87,6 +87,52 @@ not a DNS record you point by hand:
 `public/CNAME` is a leftover from GitHub Pages. Cloudflare ignores it, and it is kept only so the
 DNS cutover above is a deliberate step rather than a silent one. Delete it once Pages is retired.
 
+## Versions
+
+The docs track `horus-runtime` minor releases. Each one gets a frozen branch and its own worker:
+
+| Branch | Worker | Host |
+|--------|--------|------|
+| `main` (latest) | `horus-docs` | `docs.templecompute.com` |
+| `v0.12` | `horus-docs-v0-12` | `v0-12.docs.templecompute.com` |
+
+- `lib/versions.ts` holds `version` (`'latest'` on `main`, `'v0.12'` on its branch) and the list
+  of cut versions. The nav menu, the old-version banner and `noindex` all read from it.
+- Old versions set `noindex`. Every page's canonical URL points at `docs.templecompute.com`
+  (`metadataBase`), so only latest is indexed.
+- Hosts are one level under `docs.templecompute.com`. Universal SSL does not cover that depth,
+  but a Workers custom domain issues its own certificate for the exact hostname, so no Advanced
+  Certificate Manager is needed.
+- Deploys stay on Workers Builds. Each version worker is connected to this repo with its branch
+  as the production branch. Versions are not rebuilt when `main` changes, so a dependency upgrade
+  on `main` cannot break them.
+- On a version branch `wrangler.jsonc` uses the version worker name for both `name` and the
+  `WORKER_SELF_REFERENCE` service (they must match, see Troubleshooting).
+- Keep the current version and the two before it live. Delete older workers and their custom
+  domains.
+
+### Cut a version
+
+At each `horus-runtime` minor release, from a clean `main`:
+
+```bash
+bun scripts/cut-version.ts 0.12
+git push origin main v0.12
+```
+
+The script commits `v0.12` to the list on `main`, then creates branch `v0.12` with `version` set
+and the worker renamed to `horus-docs-v0-12`. It does not push.
+
+Then, once per version, in the Cloudflare dashboard:
+
+1. Workers & Pages → **Create** → **Import a repository** → this repo. Worker name
+   `horus-docs-v0-12`, production branch `v0.12`, build command `bun run build`, deploy command
+   `npx wrangler deploy`. Turn off non-production branch builds.
+2. `horus-docs-v0-12` → **Settings → Domains & Routes → Add → Custom domain** →
+   `v0-12.docs.templecompute.com`.
+3. Once only: `horus-docs` → **Settings → Build → Branch control**, exclude `v*` from
+   non-production builds. Otherwise it also builds version branches and fails on the worker name.
+
 ## What the config files do
 
 | File | Purpose |
